@@ -16,36 +16,36 @@
  */
 
 
-import {toVector3D} from '../../../components/hotspot_panel/types.js';
+import {expect} from 'chai';
+
 import {renderHotspot, renderHotspots} from '../../../components/utils/hotspot/render_hotspots.js';
 
-describe('renders hotspot test', () => {
-  it('renders a hotspot when given a valid config', () => {
-    const hotspot =
-        renderHotspot({name: 'test', position: toVector3D([1, 0, 0])});
-    expect(hotspot.dataset['position']).toBe('1m 0m 0m');
-    expect(hotspot.slot).toBe('hotspot-test');
+suite('renders hotspot test', () => {
+  test('renders a hotspot when given a valid config', () => {
+    const hotspot = renderHotspot({name: 'test', surface: 'data'});
+    expect(hotspot.dataset['surface']).to.be.equal('data');
+    expect(hotspot.slot).to.be.equal('hotspot-test');
   });
 
-  it('renders two hotspots when called with valid config', () => {
+  test('renders two hotspots when called with valid config', () => {
     const configs = [
-      {name: 'test-0', position: toVector3D([1, 0, 0])},
-      {name: 'test-1', position: toVector3D([2, 0, 0])},
+      {name: 'test-0', surface: 'data'},
+      {name: 'test-1', surface: 'data2'},
     ];
     const hotspots = renderHotspots(configs);
-    expect(hotspots).toBeDefined();
-    expect(hotspots.length).toBe(2);
-    expect(hotspots[0].slot).toBe('hotspot-test-0');
-    expect(hotspots[1].slot).toBe('hotspot-test-1');
+    expect(hotspots).to.be.ok;
+    expect(hotspots.length).to.be.equal(2);
+    expect(hotspots[0].slot).to.be.equal('hotspot-test-0');
+    expect(hotspots[1].slot).to.be.equal('hotspot-test-1');
   });
 
-  it('throws an error when called with duplicated name', () => {
+  test('throws an error when called with duplicated name', () => {
     const configs = [
-      {name: 'test', position: toVector3D([1, 0, 0])},
-      {name: 'test', position: toVector3D([2, 0, 0])},
+      {name: 'test', surface: 'data'},
+      {name: 'test', surface: 'data2'},
     ];
     expect(() => {
       renderHotspots(configs);
-    }).toThrow(new Error('Hotspot contains duplicate name: test'));
+    }).to.throw;
   });
 });

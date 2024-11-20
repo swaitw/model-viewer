@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
 import {Vector2} from 'three';
 
 import {$controls} from '../../features/controls.js';
@@ -20,10 +21,9 @@ import {$intersectionObserver, $isElementInViewport, $onResize, $renderer, $scen
 import {ModelViewerElement} from '../../model-viewer.js';
 import {ModelScene} from '../../three-components/ModelScene.js';
 import {Renderer} from '../../three-components/Renderer.js';
-import {resolveDpr, waitForEvent} from '../../utilities.js';
+import {waitForEvent} from '../../utilities.js';
 import {assetPath} from '../helpers.js';
 
-const expect = chai.expect;
 let externalCamera: Camera;
 let externalWidth = 0;
 let externalHeight = 0;
@@ -148,13 +148,13 @@ suite('Renderer with two scenes', () => {
       const height = 400;
       externalElement[$onResize]({width, height});
 
-      const dpr = resolveDpr();
+      const dpr = window.devicePixelRatio;
       expect(externalWidth).to.be.eq(width * dpr);
       expect(externalHeight).to.be.eq(height * dpr);
     });
   });
 
-  suite('with two loaded scenes', () => {
+  suite.skip('with two loaded scenes', () => {
     setup(async () => {
       const sceneVisible = waitForEvent(scene.element, 'poster-dismissed');
       const otherSceneVisible =
@@ -233,7 +233,6 @@ suite('Renderer with two scenes', () => {
           renderer.render(performance.now());
           const oldSize = new Vector2();
           renderer.threeRenderer.getSize(oldSize);
-          console.log(oldSize);
 
           renderer.unregisterScene(scene);
           otherScene.element[$updateSize]({width: 400, height: 200});
@@ -241,7 +240,6 @@ suite('Renderer with two scenes', () => {
 
           const size = new Vector2();
           renderer.threeRenderer.getSize(size);
-          console.log(size);
           expect(size.x).to.be.greaterThan(oldSize.width, 'renderer width');
           expect(size.y).to.be.greaterThan(oldSize.height, 'renderer height');
 

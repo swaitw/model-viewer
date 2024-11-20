@@ -13,15 +13,15 @@
  * limitations under the License.
  */
 
-import {Group, Intersection, Material as ThreeMaterial, Mesh, MeshStandardMaterial, Object3D, Raycaster} from 'three';
+import {Intersection, Material as ThreeMaterial, Mesh, MeshPhysicalMaterial, Object3D} from 'three';
 
-import {CorrelatedSceneGraph, GLTFElementToThreeObjectMap, ThreeObjectSet} from '../../three-components/gltf-instance/correlated-scene-graph.js';
-import {GLTF, GLTFElement, Material as GLTFMaterial} from '../../three-components/gltf-instance/gltf-2.0.js';
+import {CorrelatedSceneGraph, GLTFElementToThreeObjectMap} from '../../three-components/gltf-instance/correlated-scene-graph.js';
+import {GLTF, GLTFElement} from '../../three-components/gltf-instance/gltf-2.0.js';
 
 import {Model as ModelInterface} from './api.js';
-import {$setActive, $variantSet, Material} from './material.js';
-import {$children, Node, PrimitiveNode} from './nodes/primitive-node.js';
-import {$correlatedObjects, $sourceObject} from './three-dom-element.js';
+import {$setActive, $variantIndices, Material} from './material.js';
+import {Node, PrimitiveNode} from './nodes/primitive-node.js';
+import {$correlatedObjects} from './three-dom-element.js';
 
 
 
@@ -30,12 +30,11 @@ const $hierarchy = Symbol('hierarchy');
 const $roots = Symbol('roots');
 export const $primitivesList = Symbol('primitives');
 export const $loadVariant = Symbol('loadVariant');
-export const $correlatedSceneGraph = Symbol('correlatedSceneGraph');
 export const $prepareVariantsForExport = Symbol('prepareVariantsForExport');
 export const $switchVariant = Symbol('switchVariant');
-export const $threeScene = Symbol('threeScene');
-export const $materialsFromPoint = Symbol('materialsFromPoint');
 export const $materialFromPoint = Symbol('materialFromPoint');
+export const $nodeFromPoint = Symbol('nodeFromPoint');
+export const $nodeFromIndex = Symbol('nodeFromIndex');
 export const $variantData = Symbol('variantData');
 export const $availableVariants = Symbol('availableVariants');
 const $modelOnUpdate = Symbol('modelOnUpdate');
@@ -47,12 +46,10 @@ export class LazyLoader {
   gltf: GLTF;
   gltfElementMap: GLTFElementToThreeObjectMap;
   mapKey: GLTFElement;
-  doLazyLoad: () => Promise<{set: ThreeObjectSet, material: ThreeMaterial}>;
+  doLazyLoad: () => Promise<ThreeMaterial>;
   constructor(
       gltf: GLTF, gltfElementMap: GLTFElementToThreeObjectMap,
-      mapKey: GLTFElement,
-      doLazyLoad:
-          () => Promise<{set: ThreeObjectSet, material: ThreeMaterial}>) {
+      mapKey: GLTFElement, doLazyLoad: () => Promise<ThreeMaterial>) {
     this.gltf = gltf;
     this.gltfElementMap = gltfElementMap;
     this.mapKey = mapKey;
@@ -78,61 +75,49 @@ export class Model implements ModelInterface {
   private[$hierarchy] = new Array<Node>();
   private[$roots] = new Array<Node>();
   private[$primitivesList] = new Array<PrimitiveNode>();
-  private[$threeScene]: Object3D|Group;
   private[$modelOnUpdate]: () => void = () => {};
-  private[$correlatedSceneGraph]: CorrelatedSceneGraph;
   private[$variantData] = new Map<string, VariantData>();
 
   constructor(
       correlatedSceneGraph: CorrelatedSceneGraph,
       onUpdate: () => void = () => {}) {
     this[$modelOnUpdate] = onUpdate;
-    this[$correlatedSceneGraph] = correlatedSceneGraph;
     const {gltf, threeGLTF, gltfElementMap} = correlatedSceneGraph;
-    this[$threeScene] = threeGLTF.scene;
 
     for (const [i, material] of gltf.materials!.entries()) {
       const correlatedMaterial =
-          gltfElementMap.get(material) as Set<MeshStandardMaterial>;
+          gltfElementMap.get(material) as Set<MeshPhysicalMaterial>| null;
 
       if (correlatedMaterial != null) {
         this[$materials].push(new Material(
             onUpdate,
-            gltf,
-            material,
             i,
             true,
             this[$variantData],
-            correlatedMaterial));
+            correlatedMaterial,
+            material.name));
       } else {
         const elementArray = gltf['materials'] || [];
         const gltfMaterialDef = elementArray[i];
 
-        // Loads the three.js material.
-        const capturedMatIndex = i;
+        const threeMaterialSet = new Set<MeshPhysicalMaterial>();
+        gltfElementMap.set(gltfMaterialDef, threeMaterialSet);
         const materialLoadCallback = async () => {
-          const threeMaterial =
-              await threeGLTF.parser.getDependency(
-                  'material', capturedMatIndex) as MeshStandardMaterial;
-
-          // Adds correlation, maps the variant gltf-def to the
-          // three material set containing the variant material.
-          const threeMaterialSet = new Set<MeshStandardMaterial>();
-          gltfElementMap.set(gltfMaterialDef, threeMaterialSet);
+          const threeMaterial = await threeGLTF.parser.getDependency(
+                                    'material', i) as MeshPhysicalMaterial;
           threeMaterialSet.add(threeMaterial);
 
-          return {set: threeMaterialSet, material: threeMaterial};
+          return threeMaterial;
         };
 
         // Configures the material for lazy loading.
         this[$materials].push(new Material(
             onUpdate,
-            gltf,
-            gltfMaterialDef,
             i,
             false,
             this[$variantData],
-            correlatedMaterial,
+            threeMaterialSet,
+            material.name,
             new LazyLoader(
                 gltf, gltfElementMap, gltfMaterialDef, materialLoadCallback)));
       }
@@ -168,7 +153,7 @@ export class Model implements ModelInterface {
 
       const parent: Node|undefined = parentMap.get(object);
       if (parent != null) {
-        parent[$children].push(node);
+        parent.children.push(node);
       } else {
         this[$roots].push(node);
       }
@@ -213,46 +198,37 @@ export class Model implements ModelInterface {
     return null;
   }
 
-
-  /**
-   * Intersects a ray with the Model and returns a list of materials whose
-   * objects were intersected.
-   */
-  [$materialsFromPoint](raycaster: Raycaster): Material[] {
-    const hits = raycaster.intersectObject(this[$threeScene], true);
-
-    // Map the object hits to primitives and then to the active material of
-    // the primitive.
-    return hits.map((hit: Intersection<Object3D>) => {
-      const found = this[$hierarchy].find((node: Node) => {
-        if (node instanceof PrimitiveNode) {
-          const primitive = node as PrimitiveNode;
-          if (primitive.mesh === hit.object) {
-            return true;
-          }
+  [$nodeFromIndex](mesh: number, primitive: number): PrimitiveNode|null {
+    const found = this[$hierarchy].find((node: Node) => {
+      if (node instanceof PrimitiveNode) {
+        const {meshes, primitives} = node.mesh.userData.associations;
+        if (meshes == mesh && primitives == primitive) {
+          return true;
         }
-        return false;
-      }) as PrimitiveNode;
-
-      if (found != null) {
-        return found.getActiveMaterial();
       }
-      return null;
-    }) as Material[];
+      return false;
+    });
+    return found == null ? null : found as PrimitiveNode;
+  }
+
+  [$nodeFromPoint](hit: Intersection<Object3D>): PrimitiveNode {
+    return this[$hierarchy].find((node: Node) => {
+      if (node instanceof PrimitiveNode) {
+        const primitive = node as PrimitiveNode;
+        if (primitive.mesh === hit.object) {
+          return true;
+        }
+      }
+      return false;
+    }) as PrimitiveNode;
   }
 
   /**
    * Intersects a ray with the Model and returns the first material whose
    * object was intersected.
    */
-  [$materialFromPoint](raycaster: Raycaster): Material|null {
-    const materials = this[$materialsFromPoint](raycaster);
-
-    if (materials.length > 0) {
-      return materials[0];
-    }
-
-    return null;
+  [$materialFromPoint](hit: Intersection<Object3D>): Material {
+    return this[$nodeFromPoint](hit).getActiveMaterial();
   }
 
   /**
@@ -290,19 +266,11 @@ export class Model implements ModelInterface {
     }
 
     const threeMaterialSet =
-        material[$correlatedObjects] as Set<MeshStandardMaterial>;
+        material[$correlatedObjects] as Set<MeshPhysicalMaterial>;
 
-    // clones the gltf material data and updates the material name.
-    const gltfSourceMaterial =
-        JSON.parse(JSON.stringify(material[$sourceObject])) as GLTFMaterial;
-    gltfSourceMaterial.name = newMaterialName;
-    // Adds the source material clone to the gltf def.
-    const gltf = this[$correlatedSceneGraph].gltf;
-    gltf.materials!.push(gltfSourceMaterial);
-
-    const clonedSet = new Set<MeshStandardMaterial>();
+    const clonedSet = new Set<MeshPhysicalMaterial>();
     for (const [i, threeMaterial] of threeMaterialSet.entries()) {
-      const clone = threeMaterial.clone() as MeshStandardMaterial;
+      const clone = threeMaterial.clone() as MeshPhysicalMaterial;
       clone.name =
           newMaterialName + (threeMaterialSet.size > 1 ? '_inst' + i : '');
       clonedSet.add(clone);
@@ -310,12 +278,11 @@ export class Model implements ModelInterface {
 
     const clonedMaterial = new Material(
         this[$modelOnUpdate],
-        this[$correlatedSceneGraph].gltf,
-        gltfSourceMaterial,
         this[$materials].length,
         false,  // Cloned as inactive.
         this[$variantData],
-        clonedSet);
+        clonedSet,
+        newMaterialName);
 
     this[$materials].push(clonedMaterial);
 
@@ -417,7 +384,7 @@ export class Model implements ModelInterface {
 
     for (const material of this.materials) {
       if (material.hasVariant(variantName)) {
-        material[$variantSet].delete(variant.index);
+        material[$variantIndices].delete(variant.index);
       }
     }
 

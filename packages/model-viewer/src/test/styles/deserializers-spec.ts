@@ -13,9 +13,9 @@
  * limitations under the License.
  */
 
-import {enumerationDeserializer} from '../../styles/deserializers.js';
+import {expect} from 'chai';
 
-const expect = chai.expect;
+import {enumerationDeserializer} from '../../styles/deserializers.js';
 
 suite('deserializers', () => {
   suite('enumerationDeserializer', () => {

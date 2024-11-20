@@ -15,7 +15,7 @@
 
 import {ReactiveElement} from 'lit';
 import {property} from 'lit/decorators.js';
-import {Event as ThreeEvent, Vector2, Vector3} from 'three';
+import {Camera as ThreeCamera, Event as ThreeEvent, Vector2, Vector3, WebGLRenderer} from 'three';
 
 import {HAS_INTERSECTION_OBSERVER, HAS_RESIZE_OBSERVER} from './constants.js';
 import {$updateEnvironment} from './features/environment.js';
@@ -24,10 +24,9 @@ import {$evictionPolicy, CachingGLTFLoader} from './three-components/CachingGLTF
 import {ModelScene} from './three-components/ModelScene.js';
 import {ContextLostEvent, Renderer} from './three-components/Renderer.js';
 import {clamp, debounce} from './utilities.js';
-import {dataUrlToBlob} from './utilities/data-conversion.js';
 import {ProgressTracker} from './utilities/progress-tracker.js';
 
-const CLEAR_MODEL_TIMEOUT_MS = 1000;
+const CLEAR_MODEL_TIMEOUT_MS = 10;
 const FALLBACK_SIZE_UPDATE_THRESHOLD_MS = 50;
 const ANNOUNCE_MODEL_VISIBILITY_DEBOUNCE_THRESHOLD = 0;
 const UNSIZED_MEDIA_WIDTH = 300;
@@ -117,6 +116,15 @@ export interface FramingInfo {
 export interface Camera {
   viewMatrix: Array<number>;
   projectionMatrix: Array<number>;
+}
+
+export interface EffectComposerInterface {
+  setRenderer(renderer: WebGLRenderer): void;
+  setMainScene(scene: ModelScene): void;
+  setMainCamera(camera: ThreeCamera): void;
+  setSize(width: number, height: number): void;
+  beforeRender(time: DOMHighResTimeStamp, delta: DOMHighResTimeStamp): void;
+  render(deltaTime?: DOMHighResTimeStamp): void;
 }
 
 export interface RendererInterface {
@@ -368,7 +376,8 @@ export default class ModelViewerElementBase extends ReactiveElement {
     renderer.unregisterScene(this[$scene]);
 
     this[$clearModelTimeout] = self.setTimeout(() => {
-      this[$scene].reset();
+      this[$scene].dispose();
+      this[$clearModelTimeout] = null;
     }, CLEAR_MODEL_TIMEOUT_MS);
   }
 
@@ -393,10 +402,6 @@ export default class ModelViewerElementBase extends ReactiveElement {
 
     if (changedProperties.has('alt')) {
       this[$userInputElement].setAttribute('aria-label', this[$ariaLabel]);
-    }
-
-    if (changedProperties.has('withCredentials')) {
-      CachingGLTFLoader.withCredentials = this.withCredentials
     }
 
     if (changedProperties.has('generateSchema')) {
@@ -452,19 +457,6 @@ export default class ModelViewerElementBase extends ReactiveElement {
             0,
             outputWidth,
             outputHeight);
-        if ((blobCanvas as any).msToBlob) {
-          // NOTE: msToBlob only returns image/png
-          // so ensure mimeType is not specified (defaults to image/png)
-          // or is image/png, otherwise fallback to using toDataURL on IE.
-          if (!mimeType || mimeType === 'image/png') {
-            return resolve((blobCanvas as any).msToBlob());
-          }
-        }
-
-        if (!blobCanvas.toBlob) {
-          return resolve(await dataUrlToBlob(
-              blobCanvas.toDataURL(mimeType, qualityArgument)));
-        }
 
         blobCanvas.toBlob((blob) => {
           if (!blob) {
@@ -477,6 +469,27 @@ export default class ModelViewerElementBase extends ReactiveElement {
     } finally {
       this[$updateSize]({width, height});
     };
+  }
+
+  /**
+   * Registers a new EffectComposer as the main rendering pipeline,
+   * instead of the default ThreeJs renderer.
+   * This method also calls setRenderer, setMainScene, and setMainCamera on
+   * your effectComposer.
+   * @param effectComposer An EffectComposer from `pmndrs/postprocessing`
+   */
+  registerEffectComposer(effectComposer: EffectComposerInterface) {
+    effectComposer.setRenderer(this[$renderer].threeRenderer);
+    effectComposer.setMainCamera(this[$scene].getCamera());
+    effectComposer.setMainScene(this[$scene]);
+    this[$scene].effectRenderer = effectComposer;
+  }
+
+  /**
+   * Removes the registered EffectComposer
+   */
+  unregisterEffectComposer() {
+    this[$scene].effectRenderer = null;
   }
 
   registerRenderer(renderer: RendererInterface) {
@@ -516,14 +529,18 @@ export default class ModelViewerElementBase extends ReactiveElement {
   /**
    * Called on initialization and when the resize observer fires.
    */
-  [$updateSize]({width, height}: {width: any, height: any}) {
+  [$updateSize]({width, height}: {width: number, height: number}) {
+    if (width === 0 || height === 0) {
+      return;
+    }
     this[$container].style.width = `${width}px`;
     this[$container].style.height = `${height}px`;
 
-    this[$onResize]({width: parseFloat(width), height: parseFloat(height)});
+    this[$onResize]({width, height});
   }
 
-  [$tick](_time: number, _delta: number) {
+  [$tick](time: number, delta: number) {
+    this[$scene].effectRenderer?.beforeRender(time, delta);
   }
 
   [$markLoaded]() {
@@ -591,7 +608,8 @@ export default class ModelViewerElementBase extends ReactiveElement {
     // throw exceptions and/or behave in unexpected ways:
     scene.stopAnimation();
 
-    const updateSourceProgress = this[$progressTracker].beginActivity();
+    const updateSourceProgress =
+        this[$progressTracker].beginActivity('model-load');
     const source = this.src;
     try {
       const srcUpdated = scene.setSource(
@@ -605,6 +623,10 @@ export default class ModelViewerElementBase extends ReactiveElement {
 
       this[$markLoaded]();
       this[$onModelLoad]();
+
+      this.updateComplete.then(() => {
+        this.dispatchEvent(new CustomEvent('before-render'));
+      });
 
       // Wait for shaders to compile and pixels to be drawn.
       await new Promise<void>(resolve => {

@@ -26,7 +26,7 @@
  */
 
 import {Material as ThreeMaterial, Mesh} from 'three';
-import {GLTFReference} from 'three/examples/jsm/loaders/GLTFLoader';
+import {GLTFReference} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {GLTF, GLTFLoaderPlugin, GLTFParser} from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 
@@ -117,7 +117,7 @@ export default class GLTFMaterialsVariantsExtension implements
       scene.traverse(object => {
         const mesh = object as Mesh;
 
-        if (!mesh.isMesh) {
+        if (!mesh.material) {
           return;
         }
 

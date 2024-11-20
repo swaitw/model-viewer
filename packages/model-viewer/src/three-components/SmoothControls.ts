@@ -58,8 +58,8 @@ export interface SmoothControlsOptions {
 export const DEFAULT_OPTIONS = Object.freeze<SmoothControlsOptions>({
   minimumRadius: 0,
   maximumRadius: Infinity,
-  minimumPolarAngle: Math.PI / 8,
-  maximumPolarAngle: Math.PI - Math.PI / 8,
+  minimumPolarAngle: 0,
+  maximumPolarAngle: Math.PI,
   minimumAzimuthalAngle: -Infinity,
   maximumAzimuthalAngle: Infinity,
   minimumFieldOfView: 10,
@@ -125,8 +125,14 @@ export interface PointerChangeEvent extends ThreeEvent {
  * has been set in terms of position, rotation and scale, so it is important to
  * ensure that the camera's matrixWorld is in sync before using SmoothControls.
  */
-export class SmoothControls extends EventDispatcher {
+export class SmoothControls extends EventDispatcher<{
+  'user-interaction': {},
+  'pointer-change-start': {},
+  'pointer-change-end': {}
+}> {
   public orbitSensitivity = 1;
+  public zoomSensitivity = 1;
+  public panSensitivity = 1;
   public inputSensitivity = 1;
   public changeSource = ChangeSource.NONE;
 
@@ -286,8 +292,8 @@ export class SmoothControls extends EventDispatcher {
    * Sets the near and far planes of the camera.
    */
   updateNearFar(nearPlane: number, farPlane: number) {
-    this.camera.near = Math.max(nearPlane, farPlane / 1000);
-    this.camera.far = farPlane;
+    this.camera.far = farPlane === 0 ? 2 : farPlane;
+    this.camera.near = Math.max(nearPlane, this.camera.far / 1000);
     this.camera.updateProjectionMatrix();
   }
 
@@ -334,6 +340,10 @@ export class SmoothControls extends EventDispatcher {
     const nextRadius = clamp(goalRadius, minimumRadius!, maximumRadius!);
 
     if (nextTheta === theta && nextPhi === phi && nextRadius === radius) {
+      return false;
+    }
+
+    if (!isFinite(nextTheta) || !isFinite(nextPhi) || !isFinite(nextRadius)) {
       return false;
     }
 
@@ -424,13 +434,13 @@ export class SmoothControls extends EventDispatcher {
   /**
    * Update controls. In most cases, this will result in the camera
    * interpolating its position and rotation until it lines up with the
-   * designated goal orbital position.
+   * designated goal orbital position. Returns false if the camera did not move.
    *
    * Time and delta are measured in milliseconds.
    */
-  update(_time: number, delta: number) {
+  update(_time: number, delta: number): boolean {
     if (this.isStationary()) {
-      return;
+      return false;
     }
     const {maximumPolarAngle, maximumRadius} = this._options;
 
@@ -454,6 +464,7 @@ export class SmoothControls extends EventDispatcher {
     this.logFov = this.fovDamper.update(this.logFov, this.goalLogFov, delta, 1);
 
     this.moveCamera();
+    return true;
   }
 
   updateTouchActionStyle() {
@@ -478,10 +489,6 @@ export class SmoothControls extends EventDispatcher {
         this.goalLogFov === this.logFov;
   }
 
-  private dispatchChange() {
-    this.dispatchEvent({type: 'change', source: this.changeSource});
-  }
-
   private moveCamera() {
     // Derive the new camera position from the updated spherical:
     this.spherical.makeSafe();
@@ -493,8 +500,6 @@ export class SmoothControls extends EventDispatcher {
       this.camera.fov = Math.exp(this.logFov);
       this.camera.updateProjectionMatrix();
     }
-
-    this.dispatchChange();
   }
 
   private userAdjustOrbit(
@@ -503,12 +508,6 @@ export class SmoothControls extends EventDispatcher {
         deltaTheta * this.orbitSensitivity * this.inputSensitivity,
         deltaPhi * this.orbitSensitivity * this.inputSensitivity,
         deltaZoom * this.inputSensitivity);
-
-    // Always make sure that an initial event is triggered in case there is
-    // contention between user interaction and imperative changes. This initial
-    // event will give external observers that chance to observe that
-    // interaction occurred at all:
-    this.dispatchChange();
   }
 
   // Wraps to between -pi and pi
@@ -519,7 +518,7 @@ export class SmoothControls extends EventDispatcher {
   }
 
   private pixelLengthToSphericalAngle(pixelLength: number): number {
-    return 2 * Math.PI * pixelLength / this.element.clientHeight;
+    return 2 * Math.PI * pixelLength / this.scene.height;
   }
 
   private twoTouchDistance(touchOne: Pointer, touchTwo: Pointer): number {
@@ -535,7 +534,7 @@ export class SmoothControls extends EventDispatcher {
     if (!this._disableZoom) {
       const touchDistance =
           this.twoTouchDistance(this.pointers[0], this.pointers[1]);
-      const deltaZoom = ZOOM_SENSITIVITY *
+      const deltaZoom = ZOOM_SENSITIVITY * this.zoomSensitivity *
           (this.lastSeparation - touchDistance) * 50 / this.scene.height;
       this.lastSeparation = touchDistance;
 
@@ -591,7 +590,8 @@ export class SmoothControls extends EventDispatcher {
   private initializePan() {
     const {theta, phi} = this.spherical;
     const psi = theta - this.scene.yaw;
-    this.panPerPixel = PAN_SENSITIVITY / this.scene.height;
+    this.panPerPixel =
+        PAN_SENSITIVITY * this.panSensitivity / this.scene.height;
     this.panProjection.set(
         -Math.cos(psi),
         -Math.cos(phi) * Math.sin(psi),
@@ -615,8 +615,6 @@ export class SmoothControls extends EventDispatcher {
     target.add(dxy.applyMatrix3(this.panProjection));
     scene.boundingSphere.clampPoint(target, target);
     scene.setTarget(target.x, target.y, target.z);
-
-    this.dispatchChange();
   }
 
   private recenter(pointer: PointerEvent) {
@@ -707,12 +705,22 @@ export class SmoothControls extends EventDispatcher {
       this.changeSource = ChangeSource.USER_INTERACTION;
       this.onMouseDown(event);
     }
+
+    if (this.changeSource === ChangeSource.USER_INTERACTION) {
+      this.dispatchEvent({type: 'user-interaction'});
+    }
   };
 
   private onPointerMove = (event: PointerEvent) => {
     const pointer =
         this.pointers.find((pointer) => pointer.id === event.pointerId);
     if (pointer == null) {
+      return;
+    }
+
+    // In case no one gave us a pointerup or pointercancel event.
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      this.onPointerUp(event);
       return;
     }
 
@@ -818,10 +826,12 @@ export class SmoothControls extends EventDispatcher {
     this.changeSource = ChangeSource.USER_INTERACTION;
 
     const deltaZoom = (event as WheelEvent).deltaY *
-        ((event as WheelEvent).deltaMode == 1 ? 18 : 1) * ZOOM_SENSITIVITY / 30;
+        ((event as WheelEvent).deltaMode == 1 ? 18 : 1) * ZOOM_SENSITIVITY *
+        this.zoomSensitivity / 30;
     this.userAdjustOrbit(0, 0, deltaZoom);
 
     event.preventDefault();
+    this.dispatchEvent({type: 'user-interaction'});
   };
 
   private onKeyDown = (event: KeyboardEvent) => {
@@ -837,6 +847,7 @@ export class SmoothControls extends EventDispatcher {
 
     if (relevantKey) {
       event.preventDefault();
+      this.dispatchEvent({type: 'user-interaction'});
     } else {
       this.changeSource = changeSource;
     }
@@ -852,10 +863,11 @@ export class SmoothControls extends EventDispatcher {
     let relevantKey = true;
     switch (event.key) {
       case 'PageUp':
-        this.userAdjustOrbit(0, 0, ZOOM_SENSITIVITY);
+        this.userAdjustOrbit(0, 0, ZOOM_SENSITIVITY * this.zoomSensitivity);
         break;
       case 'PageDown':
-        this.userAdjustOrbit(0, 0, -1 * ZOOM_SENSITIVITY);
+        this.userAdjustOrbit(
+            0, 0, -1 * ZOOM_SENSITIVITY * this.zoomSensitivity);
         break;
       case 'ArrowUp':
         this.userAdjustOrbit(0, -KEYBOARD_ORBIT_INCREMENT, 0);

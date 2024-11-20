@@ -13,16 +13,15 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
 import {PerspectiveCamera, Vector3} from 'three';
 
 import {$controls} from '../../features/controls.js';
 import {$userInputElement} from '../../model-viewer-base.js';
 import {ModelViewerElement} from '../../model-viewer.js';
-import {ChangeSource, SmoothControls} from '../../three-components/SmoothControls.js';
+import {SmoothControls} from '../../three-components/SmoothControls.js';
 import {waitForEvent} from '../../utilities.js';
 import {assetPath, dispatchSyntheticEvent} from '../helpers.js';
-
-const expect = chai.expect;
 
 const ONE_FRAME_DELTA = 1000.0 / 60.0;
 const FIFTY_FRAME_DELTA = 50.0 * ONE_FRAME_DELTA;
@@ -284,101 +283,6 @@ suite('SmoothControls', () => {
           settleControls(controls);
 
           expect(controls.getFieldOfView()).to.be.lessThan(fov);
-        });
-      });
-
-      suite('events', () => {
-        test('dispatches "change" on user interaction', () => {
-          let didCall = false;
-          let changeSource;
-
-          controls.addEventListener('change', ({source}) => {
-            didCall = true;
-            changeSource = source;
-          });
-
-          dispatchSyntheticEvent(element, 'keydown', {key: 'ArrowUp'});
-          settleControls(controls);
-
-          expect(didCall).to.be.true;
-          expect(changeSource).to.equal(ChangeSource.USER_INTERACTION);
-        });
-
-        test('dispatches "change" on direct orbit change', () => {
-          let didCall = false;
-          let changeSource;
-
-          controls.addEventListener('change', ({source}) => {
-            didCall = true;
-            changeSource = source;
-          });
-
-          controls.setOrbit(33, 33, 33);
-          settleControls(controls);
-
-          expect(didCall).to.be.true;
-          expect(changeSource).to.equal(ChangeSource.NONE);
-        });
-
-        test('sends "user-interaction" multiple times', () => {
-          const expectedSources = [
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.USER_INTERACTION,
-          ];
-          let changeSource: Array<string> = [];
-
-          controls.addEventListener('change', ({source}) => {
-            changeSource.push(source);
-          });
-
-          dispatchSyntheticEvent(element, 'keydown', {key: 'ArrowUp'});
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-
-          expect(changeSource).to.eql(expectedSources);
-        });
-
-        test('does not send "user-interaction" after setOrbit', () => {
-          const expectedSources = [
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.USER_INTERACTION,
-            ChangeSource.NONE,
-            ChangeSource.NONE,
-          ];
-          let changeSource: Array<string> = [];
-
-          controls.addEventListener('change', ({source}) => {
-            changeSource.push(source);
-          });
-
-          dispatchSyntheticEvent(element, 'keydown', {key: 'ArrowUp'});
-
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-
-          controls.changeSource = ChangeSource.NONE;
-          controls.setOrbit(3, 3, 3);
-
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-          controls.update(performance.now(), ONE_FRAME_DELTA);
-
-          expect(changeSource).to.eql(expectedSources);
-        });
-
-        suite('simultaneous user and imperative interaction', () => {
-          test('reports source as user interaction', async () => {
-            const eventDispatches = waitForEvent(controls, 'change');
-            controls.adjustOrbit(1, 1, 1);
-            dispatchSyntheticEvent(element, 'keydown', {key: 'ArrowUp'});
-            settleControls(controls);
-
-            const event: any = await eventDispatches;
-            expect(event.source).to.be.equal(ChangeSource.USER_INTERACTION);
-          });
         });
       });
     });

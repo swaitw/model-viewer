@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
 import {Texture as ThreeTexture} from 'three';
 
 import {$threeTexture} from '../../../features/scene-graph/image.js';
@@ -21,10 +22,6 @@ import {$correlatedObjects} from '../../../features/scene-graph/three-dom-elemen
 import {ModelViewerElement} from '../../../model-viewer.js';
 import {waitForEvent} from '../../../utilities.js';
 import {assetPath} from '../../helpers.js';
-
-
-
-const expect = chai.expect;
 
 const ASTRONAUT_GLB_PATH = assetPath('models/Astronaut.glb');
 suite('scene-graph/texture', () => {
@@ -39,7 +36,7 @@ suite('scene-graph/texture', () => {
       await waitForEvent(element, 'load');
 
       texture = await element.createTexture(assetPath(
-          'models/glTF-Sample-Models/2.0/BoxTextured/glTF/CesiumLogoFlat.png'));
+          'models/glTF-Sample-Assets/Models/BoxTextured/glTF/CesiumLogoFlat.png'));
 
       element.model!.materials[0]
           .pbrMetallicRoughness.baseColorTexture!.setTexture(texture);

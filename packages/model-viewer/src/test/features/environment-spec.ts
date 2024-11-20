@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
 import {Texture} from 'three';
 
 import {BASE_OPACITY} from '../../features/environment.js';
@@ -23,7 +24,6 @@ import {Renderer} from '../../three-components/Renderer.js';
 import {timePasses, waitForEvent} from '../../utilities.js';
 import {assetPath, rafPasses} from '../helpers.js';
 
-const expect = chai.expect;
 const ALT_BG_IMAGE_URL = assetPath('environments/white_furnace.hdr');
 const HDR_BG_IMAGE_URL = assetPath('environments/spruit_sunrise_1k_HDR.hdr');
 const MODEL_URL = assetPath('models/reflective-sphere.gltf');
@@ -34,7 +34,7 @@ const MODEL_URL = assetPath('models/reflective-sphere.gltf');
  */
 const waitForLoadAndEnvMap = (element: ModelViewerElementBase) => {
   const load = waitForEvent(element, 'poster-dismissed');
-  const envMap = waitForEvent(element[$scene], 'envmap-update');
+  const envMap = waitForEvent(element, 'environment-change');
   return Promise.all([load, envMap]);
 };
 
@@ -77,7 +77,7 @@ suite('Environment', () => {
         document.body.insertBefore(element, document.body.firstChild);
 
         environmentChanges = 0;
-        scene.addEventListener('envmap-update', () => {
+        element.addEventListener('environment-change', () => {
           environmentChanges++;
         });
         await onLoad;
@@ -162,7 +162,7 @@ suite('Environment', () => {
 
     suite('and environment-image subsequently removed', () => {
       setup(async () => {
-        const envMapChanged = waitForEvent(scene, 'envmap-update');
+        const envMapChanged = waitForEvent(element, 'environment-change');
         element.removeAttribute('environment-image');
         await envMapChanged;
       });
@@ -194,6 +194,33 @@ suite('Environment', () => {
       expect(scene.environment!.name).to.be.eq(element.skyboxImage);
     });
 
+    test('has tight radius', async function() {
+      expect(scene.farRadius()).to.be.lessThan(2);
+    });
+
+    suite('with skybox-height property', () => {
+      setup(async () => {
+        element.setAttribute('skybox-height', '1m');
+        await element.updateComplete;
+      });
+
+      test('switches background', async function() {
+        expect(scene.background).to.be.null;
+      });
+
+      test('has wide radius', async function() {
+        expect(scene.farRadius()).to.be.greaterThan(2);
+      });
+
+      test('no skybox-image disables grounded skybox', async function() {
+        element.setAttribute('skybox-image', '');
+        await element.updateComplete;
+        await rafPasses();
+        await rafPasses();
+        expect(scene.farRadius()).to.be.lessThan(2);
+      });
+    });
+
     suite('with an environment-image', () => {
       setup(async () => {
         const environmentChanged = waitForEvent(element, 'environment-change');
@@ -220,9 +247,9 @@ suite('Environment', () => {
 
       suite('and skybox-image subsequently removed', () => {
         setup(async () => {
-          const envMapChanged = waitForEvent(scene, 'envmap-update');
           element.removeAttribute('skybox-image');
-          await envMapChanged;
+          await element.updateComplete;
+          await rafPasses();
         });
 
         test('continues using environment-image as environment map', () => {
@@ -237,7 +264,7 @@ suite('Environment', () => {
 
     suite('and skybox-image subsequently removed', () => {
       setup(async () => {
-        const envMapChanged = waitForEvent(scene, 'envmap-update');
+        const envMapChanged = waitForEvent(element, 'environment-change');
         element.removeAttribute('skybox-image');
         await envMapChanged;
       });

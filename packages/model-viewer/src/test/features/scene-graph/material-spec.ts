@@ -13,7 +13,8 @@
  * limitations under the License.
  */
 
-import {MeshStandardMaterial, Texture as ThreeTexture} from 'three';
+import {expect} from 'chai';
+import {Material, MeshStandardMaterial, Texture as ThreeTexture} from 'three';
 
 import {$threeTexture} from '../../../features/scene-graph/image.js';
 import {$lazyLoadGLTFInfo} from '../../../features/scene-graph/material.js';
@@ -24,17 +25,13 @@ import {ModelViewerElement} from '../../../model-viewer.js';
 import {waitForEvent} from '../../../utilities.js';
 import {assetPath} from '../../helpers.js';
 
-
-
-const expect = chai.expect;
-
 const CUBES_GLTF_PATH = assetPath('models/cubes.gltf');
 const HELMET_GLB_PATH = assetPath(
-    'models/glTF-Sample-Models/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb');
+    'models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb');
 const ALPHA_BLEND_MODE_TEST = assetPath(
-    'models/glTF-Sample-Models/2.0/AlphaBlendModeTest/glTF-Binary/AlphaBlendModeTest.glb');
+    'models/glTF-Sample-Assets/Models/AlphaBlendModeTest/glTF-Binary/AlphaBlendModeTest.glb');
 const REPLACEMENT_TEXTURE_PATH = assetPath(
-    'models/glTF-Sample-Models/2.0/BoxTextured/glTF/CesiumLogoFlat.png');
+    'models/glTF-Sample-Assets/Models/BoxTextured/glTF/CesiumLogoFlat.png');
 suite('scene-graph/material', () => {
   suite('Test Texture Slots', () => {
     let element: ModelViewerElement;
@@ -167,10 +164,11 @@ suite('scene-graph/material', () => {
 
     test('test alpha cutoff expect disabled by default', async () => {
       await loadModel(HELMET_GLB_PATH);
-      expect(element.model!.materials[0]![$correlatedObjects]
-                 ?.values()
-                 .next()
-                 .value.alphaTest)
+      expect((element.model!.materials[0]![$correlatedObjects]
+                  ?.values()
+                  .next()
+                  .value as Material)
+                 .alphaTest)
           .to.be.equal(0);
     });
 
@@ -235,24 +233,22 @@ suite('scene-graph/material', () => {
       expect(element.model!.materials[2].getAlphaMode()).to.be.equal('MASK');
     });
   });
+
   suite('Material lazy loading', () => {
     let element: ModelViewerElement;
     let model: Model;
+
     setup(async () => {
       element = new ModelViewerElement();
-      await loadModel(CUBES_GLTF_PATH);
+      element.src = CUBES_GLTF_PATH;
+      document.body.insertBefore(element, document.body.firstChild);
+      await waitForEvent(element, 'load');
+      model = element.model as Model;
     });
 
     teardown(() => {
       document.body.removeChild(element);
     });
-
-    const loadModel = async (path: string) => {
-      element.src = path;
-      document.body.insertBefore(element, document.body.firstChild);
-      await waitForEvent(element, 'load');
-      model = element.model as Model;
-    };
 
     test('Accessing the name getter does not cause throw error.', async () => {
       expect(model.materials[2].name).to.equal('red');
@@ -270,6 +266,7 @@ suite('scene-graph/material', () => {
         'Accessing a getter of a loaded material has valid data.', async () => {
           await model.materials[2].ensureLoaded();
           expect(model.materials[2].isLoaded).to.be.true;
+          expect(model.materials[2].name).to.equal('red');
           const pbr = model.materials[2].pbrMetallicRoughness;
           expect(pbr).to.be.ok;
         });

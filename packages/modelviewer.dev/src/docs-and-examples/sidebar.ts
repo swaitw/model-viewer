@@ -28,8 +28,8 @@ interface SidebarIds {
 
 function activateSidebar(sidebarIds: SidebarIds) {
   document.querySelector(`div[id=${sidebarIds.name}]`)!.classList.add('active');
-  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)!.classList.add(
-      'active');
+  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)
+      ?.classList.add('active');
   document.querySelector(`h3[id=${sidebarIds.category}]`)!.classList.add(
       'active');
 }
@@ -37,8 +37,8 @@ function activateSidebar(sidebarIds: SidebarIds) {
 function deactivateSidebar(sidebarIds: SidebarIds) {
   document.querySelector(`div[id=${sidebarIds.name}]`)!.classList.remove(
       'active');
-  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)!.classList.remove(
-      'active');
+  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)
+      ?.classList.remove('active');
   document.querySelector(`h3[id=${sidebarIds.category}]`)!.classList.remove(
       'active');
 }
@@ -49,8 +49,8 @@ function addDeactive(sidebarIds: SidebarIds) {
 }
 
 function addDeactiveCategory(sidebarIds: SidebarIds) {
-  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)!.classList.add(
-      'de-active');
+  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)
+      ?.classList.add('de-active');
 }
 
 function removeDeactive(sidebarIds: SidebarIds) {
@@ -59,12 +59,19 @@ function removeDeactive(sidebarIds: SidebarIds) {
 }
 
 function removeDeactiveCategory(sidebarIds: SidebarIds) {
-  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)!.classList.remove(
-      'de-active');
+  document.querySelector(`h4[id=${sidebarIds.subcategory}]`)
+      ?.classList.remove('de-active');
 }
 
+const identicalCategories = ['loading', 'augmentedreality', 'stagingandcameras', 'annotations', 'lightingandenv', 'animation', 'scenegraph'];
+
 export function getSidebarCategoryForNewPage(): string {
-  return previouslyActive.split('-')[0];
+  const category = previouslyActive.split('-')[0];
+  if (identicalCategories.includes(category)) {
+    return category;
+  } else {
+    return 'postprocessing';
+  }
 }
 
 function getSidebarIdsFromSidebarName(name: string): SidebarIds {
@@ -158,13 +165,15 @@ function removeActiveEntry(sidebarIds: SidebarIds) {
 
 function updateHeader() {
   const sidebarIds = getSidebarIdsFromSidebarName(previouslyActive);
-  const subCat = document.querySelector(`h4[id=${
-      sidebarIds.subcategory}]`)!.firstElementChild!.innerHTML;
+  const subCat = document.querySelector(`h4[id=${sidebarIds.subcategory}]`)
+                     ?.firstElementChild!.innerHTML;
   const cat = document.querySelector(`h3[id=${
       sidebarIds.category}]`)!.firstElementChild!.innerHTML;
   const outerHeaderId = sidebarIds.category.split('-')[0];
   const outerHeader = document.querySelector(`h1[id=${outerHeaderId}]`)!;
-  outerHeader.innerHTML = cat.concat(': ', subCat);
+  if (subCat) {
+    outerHeader.innerHTML = cat.concat(': ', subCat);
+  }
 }
 
 function handleHTMLEntry(htmlEntry: IntersectionObserverEntry) {
@@ -294,41 +303,41 @@ function handleExamples(entries: IntersectionObserverEntry[], _observer: any) {
 /*
  * Update the table of contents based on how the page is viewed.
  */
-export function sidebarObserver(docsOrExample: string) {
-  if (docsOrExample === 'docs') {
-    const observer = new IntersectionObserver(entries => {
-      if (isSideBarClick) {  // sidebar click
-        handlePageJump(entries);
-      } else {  // scroll
-        for (const htmlEntry of entries) {
-          handleHTMLEntry(htmlEntry);
-        }
+export function sidebarDocsObserver() {
+  const observer = new IntersectionObserver(entries => {
+    if (isSideBarClick) {  // sidebar click
+      handlePageJump(entries);
+    } else {  // scroll
+      for (const htmlEntry of entries) {
+        handleHTMLEntry(htmlEntry);
       }
-      if (isFirstOpen) {  // page load
-        updateSidebarViewFirstTime(entries);
-      }
-      updateHeader();
-    });
-    // i.e. attributes, properties, events, methods, slots, custom css.
-    let orderIndex = 0;
-    document.querySelectorAll('div[id*="entrydocs"]').forEach((section) => {
-      const idSplitList = section.getAttribute('id')!.split('-');
-      const id = idSplitList.slice(1, 10).join('-');
-      order.set(id, orderIndex);
-      orderIndex += 1;
-      observer.observe(section);
-    });
-  } else {
-    const options = {
-      root: null,
-      rootMargin: '0px',
-      threshold: [0, 0.25, 0.5, 0.75, 1],
-    };
-    const observer = new IntersectionObserver(handleExamples, options);
-    document.querySelectorAll('div[class="demo"]').forEach((section) => {
-      observer.observe(section);
-    });
-  }
+    }
+    if (isFirstOpen) {  // page load
+      updateSidebarViewFirstTime(entries);
+    }
+    updateHeader();
+  });
+  // i.e. attributes, properties, events, methods, slots, custom css.
+  let orderIndex = 0;
+  document.querySelectorAll('div[id*="entrydocs"]').forEach((section) => {
+    const idSplitList = section.getAttribute('id')!.split('-');
+    const id = idSplitList.slice(1, 10).join('-');
+    order.set(id, orderIndex);
+    orderIndex += 1;
+    observer.observe(section);
+  });
+}
+
+export function sidebarExamplesObserver() {
+  const options = {
+    root: null,
+    rootMargin: '0px',
+    threshold: [0, 0.25, 0.5, 0.75, 1],
+  };
+  const observer = new IntersectionObserver(handleExamples, options);
+  document.querySelectorAll('div[class="demo"]').forEach((section) => {
+    observer.observe(section);
+  });
 }
 
 export function sidebarClick() {

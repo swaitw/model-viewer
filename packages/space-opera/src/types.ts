@@ -34,8 +34,9 @@ export interface ModelViewerConfig {
   fieldOfView?: string;
   environmentImage?: string;  // IBL/HDRI lighting
   exposure?: number;  // Environment for hdr environment, used as ibl intensity
-  poster?: string;    // Display an image before model finished loading
-  reveal?: string;    // Controls when the model should be revealed
+  toneMapping?: string;
+  poster?: string;  // Display an image before model finished loading
+  reveal?: string;  // Controls when the model should be revealed
   interactionPrompt?: string;
   shadowIntensity?: number;
   shadowSoftness?: number;
@@ -124,7 +125,8 @@ export const INITIAL_STATE: State = {
     modelViewerSnippet: {
       arConfig: {ar: true, arModes: 'webxr scene-viewer quick-look'},
       bestPractices: {progressBar: true, arButton: true, arPrompt: true},
-      config: {cameraControls: true, shadowIntensity: 1},
+      config:
+          {cameraControls: true, shadowIntensity: 1, toneMapping: 'neutral'},
       poster: {height: 512, mimeType: 'image/webp'},
       hotspots: [],
       relativeFilePaths: {posterName: 'poster.webp'},
@@ -148,7 +150,7 @@ export function extractStagingConfig(config: ModelViewerConfig):
     ModelViewerConfig {
   return {
     environmentImage: config.environmentImage, exposure: config.exposure,
-        useEnvAsSkybox: config.useEnvAsSkybox,
+        toneMapping: config.toneMapping, useEnvAsSkybox: config.useEnvAsSkybox,
         shadowIntensity: config.shadowIntensity,
         shadowSoftness: config.shadowSoftness,
         cameraControls: config.cameraControls, autoRotate: config.autoRotate,

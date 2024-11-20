@@ -1,4 +1,6 @@
-import {Accessor, AlphaMode, AnimationSampler, Asset, Camera, ExtensionDictionary, Extras, MagFilter, Mesh, MinFilter, RGB, RGBA, Scene, WrapMode} from './gltf-2.0';
+import {Vector2} from 'three';
+
+import {Accessor, AlphaMode, AnimationSampler, Asset, Camera, ExtensionDictionary, Extras, MagFilter, Mesh, MinFilter, RGB, RGBA, Scene, WrapMode} from './gltf-2.0.js';
 
 
 export interface Sampler {
@@ -9,6 +11,9 @@ export interface Sampler {
   wrapT: WrapMode;
   extensions?: ExtensionDictionary;
   extras?: Extras;
+  rotation: number;
+  repeat: Vector2;
+  offset: Vector2;
 }
 
 export interface Texture {

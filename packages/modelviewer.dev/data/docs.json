@@ -74,6 +74,18 @@
           "default": "false",
           "options": "true, false"
         }
+      },
+      {
+        "name": "a11y",
+        "htmlName": "a11y",
+        "description": "Add unique translations for the model wcag compliance. Use this attribute, you must provide a JSON object with the following keys: front, back, left, right, upper-front, upper-back, upper-left, upper-right, lower-front, lower-back, lower-left, lower-right, interaction-prompt. The values of these keys should be the translations for the model's orientation. This attribute is useful for screen readers and other assistive technologies.",
+        "links": [
+          "<a href=\"../examples/loading/#useA11y\">Related examples</a>"
+        ],
+        "default": {
+          "default": "null",
+          "options": "{&quot;front&quot;: &quot;Front of 3D model&quot;,&quot;back&quot;: &quot;Back of 3D model&quot;,&quot;left&quot;: &quot;Left of 3D model&quot;,&quot;right&quot;: &quot;Right of 3D model&quot;,&quot;upper-front&quot;: &quot;Upper front of 3D model&quot;,&quot;upper-back&quot;: &quot;Upper back of 3D model&quot;,&quot;upper-left&quot;: &quot;Upper left of 3D model&quot;,&quot;upper-right&quot;: &quot;Upper right of 3D model&quot;,&quot;lower-front&quot;: &quot;Lower front of 3D model&quot;,&quot;lower-back&quot;: &quot;Lower back of 3D model&quot;,&quot;lower-left&quot;: &quot;Lower left of 3D model&quot;,&quot;lower-right&quot;: &quot;Lower right of 3D model&quot;,&quot;interaction-prompt&quot;: &quot;'Use mouse, touch or arrow keys to move&quot;}"
+        }
       }
     ],
     "Properties": [
@@ -120,6 +132,11 @@
         "links": [
           "<a href=\"../examples/loading/#meshoptSupport\"><span class='attribute'>meshoptDecoderLocation</span> example</a>"
         ]
+      },
+      {
+        "name": "lottieLoaderLocation",
+        "htmlName": "lottieLoaderLocation",
+        "description": "This static, writable property sets <span class='attribute'>&lt;model-viewer&gt;</span>'s LottieLoader location URL. The default URL is <code>https://cdn.jsdelivr.net/npm/three@0.146.0/examples/jsm/loaders/LottieLoader.js</code>. It will also require the server to provide the lottie canvas module at <code>../libs/lottie_canvas.module.js</code>."
       },
       {
         "name": "minimumRenderScale",
@@ -187,6 +204,16 @@
         "description": "Returns a screenshot of the current model render in the format specified by <i>type</i> (defaults to image/png). The screenshot is encoded as a data URL string. In formats that support a sliding scale of quality (such as image/jpeg and image/webp) you can also specify a value for <i>encoderOptions</i> between 0 and 1 (<i>encoderOptions</i> defaults to 0.92 otherwise)."
       },
       {
+        "name": "registerEffectComposer(effectComposer)",
+        "htmlName": "registerEffectComposer",
+        "description": "This method allows you to replace the default rendering with an <a href=\"https://github.com/pmndrs/postprocessing\" target=\"_blank\">EffectComposer</a> renderer stack for this element. Unlike <code>externalRenderer</code>, all glTF and rendering-related portions of our API continue to function normally.<br/><br/>The EffectComposer you provide must implement our <code>EffectComposerInterface</code>, which consists of the following functions: <br/><br/>- <code>render(deltaTime?: number): void</code><br/>- <code>setRenderer(renderer: WebGLRenderer): void</code><br/>- <code>setMainScene(scene: Scene): void</code><br/>- <code>setMainCamera(camera: Camera): void</code><br/>- <code>setSize(width: number, height: number): void</code><br/><br/>Registering your EffectComposer using this method calls <code>setRenderer</code>, <code>setMainScene</code>, and <code>setMainCamera</code>. We will call your <code>render</code> method as we would the regular render method, with deltaTime in milliseconds. We will call your <code>setSize</code> method when the element is resized so your effects are always properly sized."
+      },
+      {
+        "name": "unregisterEffectComposer()",
+        "htmlName": "unregisterEffectComposer",
+        "description": "Switches back to default rendering and stops calling the EffectComposer."
+      },
+      {
         "name": "registerRenderer(externalRenderer)",
         "htmlName": "registerRenderer",
         "description": "This method allows you to replace our entire rendering stack with your own for this element. The glTF-related portions of our API cease to function: ar, lighting, staging, animation, scene-graph. However, loading, camera, and annotations continue to function normally. Note that you are now in charge of your own data, so you can load any type of file you choose, or even generate a scene from script.<br/><br/>The externalRenderer you provide must implement our <code>RendererInterface</code>, which consists of three functions: <br/><br/>- <code>load(progressCallback: (progress: number) => void): Promise&lt;FramingInfo&gt;</code><br/>- <code>render(camera: Camera): void</code><br/>- <code>resize(width: number, height: number): void</code> <br/><br/>The element will call your <code>load</code> method when it would normally load a glTF, lazily by default. Make sure to set the <code>src</code> to something (any string will do) to indicate this is not an empty element. Make sure to call our <code>progressCallback</code> occasionally, which will update our progress bar, and ensure you set a progress value of 1.0 when your pixels are ready to be shown. You must return us a <code>FramingInfo</code> object containing two numbers: <code>framedRadius</code> and <code>fieldOfViewAspect</code> to allow our camera to set its defaults. The <code>framedRadius</code> is the size of the bounding sphere and <code>fieldOfViewAspect</code> is the ideal element aspect ratio to frame the model (1.0 is a good default). <br/><br/>We will call your <code>render</code> method when the camera changes and pass you the <code>Camera</code> object containing <code>viewMatrix: Array&lt;number&gt;</code> and <code>projectionMatrix: Array&lt;number&gt;</code> as 4x4 matrices. Use this to update the rendered pixels in your <a href=\"./#entrydocs-loading-slots-canvas\">canvas slot element</a>. We will call your <code>resize</code> method when the element is resized so you can take coordinated action on your slotted canvas element."
@@ -211,9 +238,14 @@
         "description": "This event can be triggered for two reasons: a model has failed to load or parse, or the WebGL context was lost. If the model failed to load, event.detail.type will be 'loadfailure'. If the WebGL context was lost, event.detail.type will be 'webglcontextlost'. In both cases, recovery countermeasures are left as an exercise for the user. The element will not make automatic attempts to re-load a model that has failed to load. Nor will the element attempt to restore the GL context after it has been lost. Error events also hold a reference to the originating error event (when there is one) as event.detail.sourceEvent."
       },
       {
+        "name": "before-render",
+        "htmlName": "before-render",
+        "description": "Fired when a model is loaded, before the first render frame. Can fire multiple times per <span class=\"attribute\">&lt;model-viewer&gt;</span> if the <span class='attribute'>src</span> attribute is changed."
+      },
+      {
         "name": "load",
         "htmlName": "load",
-        "description": "Fired when a model is loaded. Can fire multiple times per <span class=\"attribute\">&lt;model-viewer&gt;</span> if the <span class='attribute'>src</span> attribute is changed."
+        "description": "Fired when a model is loaded, after the first render frame. Can fire multiple times per <span class=\"attribute\">&lt;model-viewer&gt;</span> if the <span class='attribute'>src</span> attribute is changed."
       },
       {
         "name": "poster-dismissed",
@@ -228,7 +260,7 @@
       {
         "name": "progress",
         "htmlName": "progress",
-        "description": "This event fires while a model, environment, and/or skybox is loading, during both download and processing. The progress of all of these concurrent tasks will be given by a value between 0 and 1: event.detail.totalProgress."
+        "description": "This event fires while a model, environment, skybox, variant, and/or a usdz conversion is loading, during both download and processing. The progress of all of these concurrent tasks will be given by a value between 0 and 1: event.detail.totalProgress. It also provides the reason why the event is fired ('model-load', 'environment-update', 'variant-update', 'usdz-conversion'): event.detail.reason."
       },
       {
         "name": "render-scale",
@@ -475,6 +507,24 @@
         }
       },
       {
+        "name": "zoom-sensitivity",
+        "htmlName": "zoomSensitivity",
+        "description": "Adjusts the speed of zoom interactions.",
+        "default": {
+          "default": "1",
+          "options": "any number"
+        }
+      },
+      {
+        "name": "pan-sensitivity",
+        "htmlName": "panSensitivity",
+        "description": "Adjusts the speed of pan interactions.",
+        "default": {
+          "default": "1",
+          "options": "any number"
+        }
+      },
+      {
         "name": "auto-rotate",
         "htmlName": "autoRotate",
         "description": "Enables the auto-rotation of the model.",
@@ -510,6 +560,15 @@
         "default": {
           "default": "auto",
           "options": "auto, none"
+        }
+      },
+      {
+        "name": "interaction-prompt-style",
+        "htmlName": "interactionPromptStyle",
+        "description": "Configures the presentation style of the <span class='attribute'>interaction-prompt</span> when it is raised. When set to \"wiggle\", the prompt will animate horizontally and the model will rotate as though the prompt is interacting with it. When set to \"basic\", the prompt is not animated, and instead simply appears until it is dismissed by user interaction.",
+        "default": {
+          "default": "wiggle",
+          "options": "wiggle, basic"
         }
       },
       {
@@ -559,7 +618,7 @@
         "htmlName": "maxCameraOrbit",
         "description": "Set the maximum orbital values of the camera. Takes values in the same form as camera-orbit, but does not support <span class='attribute'>env()</span>. Note \"Infinity\" is not an accepted keyword, but the default can still be obtained by passing \"auto\". The radius value for \"auto\" is the same as the <span class='attribute'>camera-orbit</span> radius \"auto\" value.",
         "default": {
-          "default": "Infinity 157.5deg auto",
+          "default": "Infinity 180deg auto",
           "options": "$theta $phi $radius"
         }
       },
@@ -568,7 +627,7 @@
         "htmlName": "minCameraOrbit",
         "description": "Set the minimum orbital values of the camera. Note \"Infinity\" is not an accepted keyword, but the default can still be obtained by passing \"auto\". The radius value for \"auto\" is a conservative value to ensure the camera never enters the model, so be careful when setting this to another value.",
         "default": {
-          "default": "-Infinity 22.5deg auto",
+          "default": "-Infinity 0deg auto",
           "options": "$theta $phi $radius"
         }
       },
@@ -750,16 +809,16 @@
     ],
     "Methods": [
       {
-        "name": "updateHotspot({name, position, normal})",
+        "name": "updateHotspot({name, position?, normal?, surface?})",
         "htmlName": "updateHotspot",
-        "description": "Updates the position and/or normal of the hotspot associated with <span class='attribute'>slot=\"name\"</span>. The position and normal are given in the same string format as the hotspot attributes <span class='attribute'>data-position</span> and <span class='attribute'>data-normal</span>, which are also in the same format as the <span class='attribute'>camera-target</span> attribute."
+        "description": "Updates the position, norma, and/or surface of the hotspot associated with <span class='attribute'>slot=\"name\"</span>. The position, normal, and surface are given in the same string format as the hotspot attributes <span class='attribute'>data-position</span>,  <span class='attribute'>data-normal</span>, and <span class='attribute'>data-surface</span> from the slot <a href=\"#annotations-slots\">definition</a>."
       },
       {
         "name": "queryHotspot(name)",
         "htmlName": "queryHotspot",
-        "description": "Returns information about the current state of the hotspot corresponding to the hotspot name given as a read-only snapshot: The position, normal, screen (canvas) position and current visibility. The screen position is represented as a Vector3 with z as the OpenGL depth information. The function returns null if no hotspot is found.",
+        "description": "Returns information about the current state of the hotspot corresponding to the hotspot name as a snapshot: the position, normal, canvasPosition, and facingCamera. The canvas position is represented as a Vector3D with z as the OpenGL depth information. The function returns null if no hotspot is found.",
         "links": [
-          "<a href=\"../examples/annotations/#overlays\"><span class='attribute'>custom overlays</span> example</a>"
+          "<a href=\"../examples/annotations/#dimensions\"><span class='attribute'>dimension lines</span> example</a>"
         ]
       },
       {
@@ -769,13 +828,21 @@
         "links": [
           "<a href=\"../examples/stagingandcameras/#panning\"><span class='attribute'>positionAndNormalFromPoint</span> example</a>"
         ]
+      },
+      {
+        "name": "surfaceFromPoint(clientX, clientY)",
+        "htmlName": "surfaceFromPoint",
+        "description": "This method returns a dynamic hotspot ID string of the point on the mesh corresponding to the input pixel coordinates given relative to the model-viewer element. The ID string can be used in the data-surface attribute of the hotspot to make it follow this point on the surface even as the model animates. If the mesh is not hit, the result is null.",
+        "links": [
+          "<a href=\"../examples/annotations/#animatedHotspots\"><span class='attribute'>animated hotspots</span> example</a>"
+        ]
       }
     ],
     "Slots": [
       {
         "name": "hotspot-*",
         "htmlName": "hotspot",
-        "description": "Any child element under <span class=\"attribute\">&lt;model-viewer&gt;</span> with a slot name starting with \"hotspot\" will be aligned with the 3D model using its <span class='attribute'>data-position</span> and <span class='attribute'>data-normal</span> attributes. See the <a href=\"../examples/annotations\">annotations example</a> for details."
+        "description": "Any child element under <span class=\"attribute\">&lt;model-viewer&gt;</span> with a slot name starting with \"hotspot\" will be aligned with the 3D model using its <span class='attribute'>data-position</span> and <span class='attribute'>data-normal</span> attributes in model coordinates, in the same format as <span class='attribute'>camera-target</span>. Alternately, the <span class='attribute'>data-surface</span> attribute can be used to instead specify the glTF mesh, primitive, three vertex indices and three barycentric coordinates to specify a surface point that will animate along with the mesh. It is recommended to use the <a href=\"./#entrydocs-annotations-methods-surfaceFromPoint\">surfaceFromPoint</a> method to generate this string interactively. See the <a href=\"../examples/annotations/#animatedHotspots\">annotations example</a> for details."
       }
     ]
   },
@@ -786,10 +853,22 @@
       {
         "name": "skybox-image",
         "htmlName": "skyboxImage",
-        "description": "Sets the background image of the scene. Takes a URL to an <a href=\"https://en.wikipedia.org/wiki/Equirectangular_projection\">equirectangular projection image</a> that's used for the skybox, as well as applied as an environment map on the model. Supports png, jpg and hdr (recommended) images.",
+        "description": "Sets the background image of the scene. Takes a URL to an <a href=\"https://en.wikipedia.org/wiki/Equirectangular_projection\">equirectangular projection image</a> that's used for the skybox, as well as applied as an environment map on the model. Supports png, hdr, and jpg (including UltraHDR) images. HDR images are strongly recommended to adequately represent lighting, and the UltraHDR JPEG format is particularly recommended for its high compression of HDR data - try it yourself using this free online <a href=\"https://gainmap-creator.monogrid.com\">converter</a>.",
         "links": [
           "<a href=\"../examples/lightingandenv/\">Related examples</a>"
         ]
+      },
+      {
+        "name": "skybox-height",
+        "htmlName": "skyboxHeight",
+        "description": "Causes the skybox to be projected onto the ground plane. The height indicates the camera's distance above the ground and acts to scale the image at ground level to the correct size. Accepts units in meters (\"m\"), centimeters (\"cm\"), or millimeters (\"mm\"). The default value of 0m disables ground projection.",
+        "links": [
+          "<a href=\"../examples/lightingandenv/#groundedSkybox\">Related examples</a>"
+        ],
+        "default": {
+          "default": "0m",
+          "options": "any positive value"
+        }
       },
       {
         "name": "environment-image",
@@ -813,6 +892,18 @@
         "default": {
           "default": "1",
           "options": "any positive value"
+        }
+      },
+      {
+        "name": "tone-mapping",
+        "htmlName": "toneMapping",
+        "description": "Selects the function that compresses the HDR rendering to an SDR image on your screen. ACES is a film industry standard that is commonly used, though it has serious color-accuracy problems. AgX is a new and improved tone mapper seeing broad adoption in film and games. Khronos PBR Neutral ('neutral') is a standard function designed specifically for accurate color reproduction in e-commerce. Our current default is neutral, but prior to v4.0 this default was ACES. The deprecated name commerce is an alias for neutral.",
+        "links": [
+          "<a href=\"../examples/lightingandenv/#toneMapping\"><span class='attribute'>tone-mapping</span> example</a>"
+        ],
+        "default": {
+          "default": "neutral",
+          "options": "neutral, aces, agx"
         }
       },
       {
@@ -1040,6 +1131,30 @@
         "description": "Async method that returns a Texture object for use with the <code>setTexture</code> method on <code>TextureInfo</code> objects in the Materials API. The uri is required, but the type defaults to 'image/png', which only designates the export format for saving a GLB. The mimetypes 'image/jpeg' and 'image/webp' are also supported.",
         "links": [
           "<a href=\"../examples/scenegraph/#createTexturesExample\">Create texture example</a>"
+        ]
+      },
+      {
+        "name": "createVideoTexture(uri)",
+        "htmlName": "createVideoTexture",
+        "description": "Returns a Texture object for use with the <code>setTexture</code> method on <code>TextureInfo</code> objects in the Materials API. The video element created is available through <code>texture.source.element</code> for controlling playback.",
+        "links": [
+          "<a href=\"../examples/scenegraph/#animatedTexturesExample\">Create animated textures example</a>"
+        ]
+      },
+      {
+        "name": "createCanvasTexture()",
+        "htmlName": "createCanvasTexture",
+        "description": "Returns a Texture object for use with the <code>setTexture</code> method on <code>TextureInfo</code> objects in the Materials API. The 2D canvas element created is available through <code>texture.source.element</code>; simply get the 2d context and draw as desired, then call <code>texture.source.update()</code>.",
+        "links": [
+          "<a href=\"../examples/scenegraph/#animatedTexturesExample\">Create animated textures example</a>"
+        ]
+      },
+      {
+        "name": "createLottieTexture(uri, quality?)",
+        "htmlName": "createLottieTexture",
+        "description": "Async method that returns a Texture object for use with the <code>setTexture</code> method on <code>TextureInfo</code> objects in the Materials API. The uri to the lottie json is required, while the quality defaults to 1 (resolution specified in the file). The Lottie animation created is available through <code>texture.source.animation</code> for controlling playback. The Lottie canvas module is lazy-loaded like the DRACO decoder and if you don't like our default CDN, you can specify your own location using <a href=\"./#entrydocs-loading-staticProperties-lottieLoaderLocation\">lottieLoaderLocation</a>. Note that an import map is required mapping 'three' to your model-viewer library file in order to load a Lottie, follow the link below for an example.",
+        "links": [
+          "<a href=\"../examples/scenegraph/#animatedTexturesExample\">Create animated textures example</a>"
         ]
       }
     ]

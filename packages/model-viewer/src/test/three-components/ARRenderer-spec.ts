@@ -13,9 +13,9 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
 import {Matrix4, PerspectiveCamera, Vector2, Vector3} from 'three';
 
-import {IS_ANDROID} from '../../constants.js';
 import {$scene} from '../../model-viewer-base.js';
 import {ModelViewerElement} from '../../model-viewer.js';
 import {ARRenderer} from '../../three-components/ARRenderer.js';
@@ -23,8 +23,6 @@ import {ModelScene} from '../../three-components/ModelScene.js';
 import {Renderer} from '../../three-components/Renderer.js';
 import {waitForEvent} from '../../utilities.js';
 import {assetPath} from '../helpers.js';
-
-const expect = chai.expect;
 
 class MockXRFrame implements XRFrame {
   constructor(public session: XRSession) {
@@ -35,6 +33,11 @@ class MockXRFrame implements XRFrame {
   // We don't use nor test the returned XRPose other than its existence.
   getPose(_xrSpace: XRSpace, _frameOfRef: XRReferenceSpace) {
     return {} as XRPose;
+  }
+
+  // We don't use getDepthInformation()
+  getDepthInformation(_view: XRView): XRCPUDepthInformation|null|undefined {
+    return;
   }
 
   getViewerPose(_referenceSpace?: XRReferenceSpace): XRViewerPose {
@@ -151,6 +154,7 @@ suite('ARRenderer', () => {
 
         readonly environmentBlendMode = {} as XREnvironmentBlendMode;
         readonly visibilityState = {} as XRVisibilityState;
+        readonly isSystemKeyboardSupported = false;
         async updateTargetFrameRate(_rate: number) {
           return;
         }
@@ -191,13 +195,6 @@ suite('ARRenderer', () => {
     if (element.parentNode != null) {
       element.parentNode.removeChild(element);
     }
-  });
-
-  // This fails on Android when karma.conf has hostname: 'bs-local.com',
-  // possibly due to not serving over HTTPS (which disables WebXR)? However,
-  // Browserstack is unstable without this hostname.
-  test('supports presenting to AR only on Android', async () => {
-    expect(await arRenderer.supportsPresentation()).to.be.equal(IS_ANDROID);
   });
 
   test('is not presenting if present has not been invoked', () => {

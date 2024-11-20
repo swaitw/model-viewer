@@ -15,6 +15,8 @@
  *
  */
 
+import {SphericalPosition} from '@google/model-viewer/lib/features/controls.js';
+
 import {Action, INITIAL_STATE, ModelViewerConfig, State} from '../../types.js';
 import {radToDeg, roundToDigits} from '../utils/reducer_utils.js';
 
@@ -53,9 +55,11 @@ function getUpdatedLimits(
   };
 }
 
-export function getOrbitString(orbit: {theta: number, phi: number}) {
+export function getOrbitString(orbit: SphericalPosition) {
   return `${roundToDigits(radToDeg(orbit.theta), DIGITS)}deg ${
-      roundToDigits(radToDeg(orbit.phi), DIGITS)}deg auto`;
+      roundToDigits(
+          radToDeg(orbit.phi),
+          DIGITS)}deg ${roundToDigits(orbit.radius, DIGITS)}m`;
 }
 
 const SET_CAMERA_CONTROLS_ENABLED = 'SET_CAMERA_CONTROLS_ENABLED';
@@ -79,13 +83,18 @@ export function dispatchAnimationName(animationName?: string) {
 }
 
 const UPDATE_IBL = 'UPDATE_IBL';
-export function dispatchEnvrionmentImage(ibl?: string) {
+export function dispatchEnvironmentImage(ibl?: string) {
   return {type: UPDATE_IBL, payload: ibl};
 }
 
 const UPDATE_EXPOSURE = 'UPDATE_EXPOSURE';
 export function dispatchExposure(exposure?: number) {
   return {type: UPDATE_EXPOSURE, payload: exposure};
+}
+
+const UPDATE_TONE_MAPPING = 'UPDATE_TONE_MAPPING';
+export function dispatchToneMapping(toneMapping?: string) {
+  return {type: UPDATE_TONE_MAPPING, payload: toneMapping};
 }
 
 const SET_USE_ENV_AS_SKYBOX = 'SET_USE_ENV_AS_SKYBOX';
@@ -144,9 +153,13 @@ export function dispatchSetMinZoom(fovDeg?: number, radius?: number) {
 }
 
 const SAVE_CAMERA_ORBIT = 'SAVE_CAMERA_ORBIT';
-export function dispatchSaveCameraOrbit(orbit: {theta: number, phi: number}|
-                                        undefined) {
+export function dispatchSaveCameraOrbit(orbit?: SphericalPosition) {
   return {type: SAVE_CAMERA_ORBIT, payload: orbit};
+}
+
+const SAVE_CAMERA_FOV = 'SAVE_CAMERA_FOV';
+export function dispatchSaveCameraFov(fov?: number) {
+  return {type: SAVE_CAMERA_FOV, payload: fov};
 }
 
 const SET_CAMERA_TARGET = 'SET_CAMERA_TARGET';
@@ -180,6 +193,8 @@ export function configReducer(
       return {...state, useEnvAsSkybox: action.payload};
     case UPDATE_EXPOSURE:
       return {...state, exposure: action.payload};
+    case UPDATE_TONE_MAPPING:
+      return {...state, toneMapping: action.payload};
     case UPDATE_IBL:
       return {...state, environmentImage: action.payload};
     case SET_AUTOPLAY_ENABLED:
@@ -200,9 +215,13 @@ export function configReducer(
       return {...state, cameraTarget};
     case SAVE_CAMERA_ORBIT:
       const orbit = action.payload;
-      const cameraOrbit =
-          orbit == null ? undefined : getOrbitString(action.payload);
+      const cameraOrbit = orbit == null ? undefined : getOrbitString(orbit);
       return {...state, cameraOrbit};
+    case SAVE_CAMERA_FOV:
+      const fieldOfView = action.payload == null ?
+          undefined :
+          `${roundToDigits(action.payload, DIGITS)}deg`;
+      return {...state, fieldOfView};
     case SET_CAMERA_FOV_LIMITS:
       return {
         ...state,

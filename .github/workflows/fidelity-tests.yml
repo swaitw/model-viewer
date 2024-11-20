@@ -5,26 +5,14 @@ on: pull_request
 jobs:
   compare_renders:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-node@v1
+    - uses: actions/checkout@v4
       with:
-        node-version: '12.x'
+        submodules: true
 
-    - name: Get npm cache directory
-      id: npm-cache
-      run: |
-        echo "::set-output name=dir::$(npm config get cache)"
-
-    - name: Cache npm packages
-      uses: actions/cache@v2
-      with:
-        path: ${{ steps.npm-cache.outputs.dir }}
-        key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-npm-
+    - uses: actions/setup-node@v4
 
     - name: NPM install
       run: npm ci
@@ -32,15 +20,11 @@ jobs:
     # - name: Lint TypeScript sources
     #   run: npm run lint
 
-    - name: Bootstrap packages
-      run: npm run bootstrap
-
     - name: Build packages
       run: |
-       ./node_modules/.bin/lerna run --scope @google/model-viewer build --stream
-       ./node_modules/.bin/lerna run --scope @google/model-viewer-render-fidelity-tools build --stream
+       npm run build --workspace=@google/model-viewer --workspace=@google/model-viewer-render-fidelity-tools
 
     - name: Fidelity tests
-      uses: GabrielBB/xvfb-action@v1.0
+      uses: coactions/setup-xvfb@v1
       with:
-        run: ./node_modules/.bin/lerna run --scope @google/model-viewer-render-fidelity-tools test --stream
+        run: npm run test --workspace=@google/model-viewer-render-fidelity-tools -- --quiet

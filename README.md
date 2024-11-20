@@ -1,6 +1,6 @@
 # The `<model-viewer>` project
 
-This is the main Github repository for the `<model-viewer>` web component and
+This is the main GitHub repository for the `<model-viewer>` web component and
 all of its related projects.
 
 **Getting started?** Check out the [`<model-viewer>`](packages/model-viewer) project!
@@ -10,11 +10,15 @@ Check out the README.md files for specific projects to get more details:
 
 👩‍🚀 **[`<model-viewer>`](packages/model-viewer)** • The `<model-viewer>` web component (probably what you are looking for)
 
+✨ **[`<model-viewer-effects>`](packages/model-viewer-effects)** • The PostProcessing plugin for `<model-viewer>`
+
 🌐 **[modelviewer.dev](packages/modelviewer.dev)** • The source for the `<model-viewer>` documentation website
 
 🖼 **[render-fidelity-tools](packages/render-fidelity-tools)** • Tools for testing how well `<model-viewer>` renders models
 
 🎨 **[shared-assets](packages/shared-assets)** • 3D models, environment maps and other assets shared across many sub-projects
+
+🚀 **[space-opera](packages/space-opera/)** • The source of the `<model-viewer>` [editor](https://modelviewer.dev/editor/)
 
 ## Development
 
@@ -27,7 +31,6 @@ Then, perform the following steps to get set up for development:
 git clone --depth=1 git@github.com:google/model-viewer.git
 cd model-viewer
 npm install
-npm run bootstrap
 ```
 
 Note: depth=1 keeps you from downloading our ~3Gb of history, which is dominated by all the versions of our golden render fidelity images.
@@ -36,7 +39,7 @@ The following global commands are available:
 
 Command                        | Description
 ------------------------------ | -----------
-`npm run bootstrap`            | Bootstraps the project for development and cross-links sub-projects
+`npm ci`                       | Install dependencies and cross-links sub-projects
 `npm run build`                | Runs the build step for all sub-projects
 `npm run serve`                | Runs a web server and opens a new browser tab pointed to the local copy of modelviewer.dev (don't forget to build!)
 `npm run test`                 | Runs tests in all sub-projects that have them
@@ -57,7 +60,6 @@ To clone via HTTPS in WSL (there are known file permissions issues with SSH keys
 git clone --depth=1 https://github.com/google/model-viewer.git
 cd model-viewer
 npm install
-npm run bootstrap
 ```
 
 To run tests in WSL, you need to bind `CHROME_BIN`:
@@ -66,7 +68,7 @@ export CHROME_BIN="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 npm run test
 ```
 
-Note that you should be able to run the `packages/model-viewer` tests with that setup, but running fidelity tests requires GUI support which is only available in WSL on Windows 11.  
+Note that you should be able to run the `packages/model-viewer` and `packages/model-viewer-effects` tests with that setup, but running fidelity tests requires GUI support which is only available in WSL on Windows 11.  
 
 <details>
  <summary>Additional WSL Troubleshooting – provided for reference only</summary>
@@ -81,7 +83,7 @@ export CHROME_BIN="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 npm run test
 ```
 
-Tests in `packages/model-viewer` should now run properly; fidelity tests might still fail (see errors and potential workarounds below).
+Tests in `packages/model-viewer` and `packages/model-viewer-effects` should now run properly; fidelity tests might still fail (see errors and potential workarounds below).
 
 ### Error: `/bin/bash^M: bad interpreter: No such file or directory`
 **Symptom**

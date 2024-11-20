@@ -25,9 +25,9 @@
   <link type="text/css" href="../../styles/docs.css" rel="stylesheet" />
   <link rel="shortcut icon" type="image/png" href="../../assets/favicon.png"/>
 
-  <!-- 💁 OPTIONAL: The :focus-visible polyfill removes the focus ring for some input types -->
-  <script src="../../node_modules/focus-visible/dist/focus-visible.js" defer></script>
 
+
+  <script defer src="https://web3dsurvey.com/collector.js"></script>
   <script>
     window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
     ga('create', 'UA-169901325-1', { 'storage': 'none' });
@@ -233,7 +233,7 @@
           </div>
           <example-snippet stamp-to="turnSkybox" highlight-as="html">
             <template>
-<model-viewer id="envlight-demo" camera-controls touch-action="pan-y" disable-pan oncontextmenu="return false;" src="../../shared-assets/models/glTF-Sample-Models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf"  skybox-image="../../shared-assets/environments/spruit_sunrise_1k_HDR.hdr" alt="A 3D model of a damaged helmet"></model-viewer>
+<model-viewer id="envlight-demo" camera-controls touch-action="pan-y" disable-pan oncontextmenu="return false;" src="../../shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF/DamagedHelmet.gltf"  skybox-image="../../shared-assets/environments/spruit_sunrise_1k_HDR.hdr" alt="A 3D model of a damaged helmet"></model-viewer>
 
 <script type="module">
   const modelViewer = document.querySelector("#envlight-demo");
@@ -454,7 +454,7 @@
 
   <!-- Loads <model-viewer> on modern browsers: -->
   <script type="module"
-      src="../../node_modules/@google/model-viewer/dist/model-viewer.js">
+      src="../../../../node_modules/@google/model-viewer/dist/model-viewer.js">
   </script>
 </body>
 </html>

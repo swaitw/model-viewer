@@ -15,7 +15,7 @@
 
 import {WebGLRenderTarget} from 'three';
 
-import {Renderer} from '../three-components/Renderer';
+import {Renderer} from '../three-components/Renderer.js';
 
 /**
  * Debug method to save an offscreen render target to an image; filename should
@@ -34,6 +34,9 @@ export const saveTarget = (target: WebGLRenderTarget, filename: string) => {
   ctx.putImageData(img, 0, 0);
 
   output.toBlob(function(blob) {
+    if (blob == null) {
+      return;
+    }
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement('a');

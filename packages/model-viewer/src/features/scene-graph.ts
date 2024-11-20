@@ -14,27 +14,27 @@
  */
 
 import {property} from 'lit/decorators.js';
-import {RepeatWrapping, sRGBEncoding, Texture, TextureLoader} from 'three';
+import {CanvasTexture, RepeatWrapping, SRGBColorSpace, Texture, VideoTexture} from 'three';
 import {GLTFExporter, GLTFExporterOptions} from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 import ModelViewerElementBase, {$needsRender, $onModelLoad, $progressTracker, $renderer, $scene} from '../model-viewer-base.js';
 import {GLTF} from '../three-components/gltf-instance/gltf-defaulted.js';
 import {ModelViewerGLTFInstance} from '../three-components/gltf-instance/ModelViewerGLTFInstance.js';
-import GLTFExporterMaterialsVariantsExtension from '../three-components/gltf-instance/VariantMaterialExporterPlugin';
+import GLTFExporterMaterialsVariantsExtension from '../three-components/gltf-instance/VariantMaterialExporterPlugin.js';
 import {Constructor} from '../utilities.js';
 
 import {Image, PBRMetallicRoughness, Sampler, TextureInfo} from './scene-graph/api.js';
 import {Material} from './scene-graph/material.js';
 import {$availableVariants, $materialFromPoint, $prepareVariantsForExport, $switchVariant, Model} from './scene-graph/model.js';
-import {Texture as ModelViewerTexture} from './scene-graph/texture';
+import {Texture as ModelViewerTexture} from './scene-graph/texture.js';
 
 
 
 export const $currentGLTF = Symbol('currentGLTF');
-const $model = Symbol('model');
+export const $originalGltfJson = Symbol('originalGltfJson');
+export const $model = Symbol('model');
 const $getOnUpdateMethod = Symbol('getOnUpdateMethod');
-const $textureLoader = Symbol('textureLoader');
-const $originalGltfJson = Symbol('originalGltfJson');
+const $buildTexture = Symbol('buildTexture');
 
 interface SceneExportOptions {
   binary?: boolean, trs?: boolean, onlyVisible?: boolean,
@@ -51,6 +51,10 @@ export interface SceneGraphInterface {
   readonly originalGltfJson: GLTF|null;
   exportScene(options?: SceneExportOptions): Promise<Blob>;
   createTexture(uri: string, type?: string): Promise<ModelViewerTexture|null>;
+  createLottieTexture(uri: string, quality?: number):
+      Promise<ModelViewerTexture|null>;
+  createVideoTexture(uri: string): ModelViewerTexture;
+  createCanvasTexture(): ModelViewerTexture;
   /**
    * Intersects a ray with the scene and returns a list of materials who's
    * objects were intersected.
@@ -70,7 +74,6 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
   class SceneGraphModelViewerElement extends ModelViewerElement {
     protected[$model]: Model|undefined = undefined;
     protected[$currentGLTF]: ModelViewerGLTFInstance|null = null;
-    private[$textureLoader] = new TextureLoader();
     private[$originalGltfJson]: GLTF|null = null;
 
     @property({type: String, attribute: 'variant-name'})
@@ -117,29 +120,60 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
       };
     }
 
-    async createTexture(uri: string, type: string = 'image/png'):
-        Promise<ModelViewerTexture|null> {
-      const currentGLTF = this[$currentGLTF];
-      const texture: Texture = await new Promise<Texture>(
-          (resolve) => this[$textureLoader].load(uri, resolve));
-      if (!currentGLTF || !texture) {
-        return null;
-      }
-      // Applies default settings.
-      texture.encoding = sRGBEncoding;
+    private[$buildTexture](texture: Texture): ModelViewerTexture {
+      // Applies glTF default settings.
+      texture.colorSpace = SRGBColorSpace;
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
-      texture.flipY = false;
+      return new ModelViewerTexture(this[$getOnUpdateMethod](), texture);
+    }
+
+    async createTexture(uri: string, type: string = 'image/png'):
+        Promise<ModelViewerTexture> {
+      const {textureUtils} = this[$renderer];
+      const texture = await textureUtils!.loadImage(uri, this.withCredentials);
+
       texture.userData.mimeType = type;
 
-      return new ModelViewerTexture(this[$getOnUpdateMethod](), texture);
+      return this[$buildTexture](texture);
+    }
+
+    async createLottieTexture(uri: string, quality = 1):
+        Promise<ModelViewerTexture> {
+      const {textureUtils} = this[$renderer];
+      const texture =
+          await textureUtils!.loadLottie(uri, quality, this.withCredentials);
+
+      return this[$buildTexture](texture);
+    }
+
+    createVideoTexture(uri: string): ModelViewerTexture {
+      const video = document.createElement('video');
+      video.crossOrigin =
+          this.withCredentials ? 'use-credentials' : 'anonymous';
+      video.src = uri;
+      video.muted = true;
+      video.playsInline = true;
+      video.loop = true;
+      video.play();
+      const texture = new VideoTexture(video);
+
+      return this[$buildTexture](texture);
+    }
+
+    createCanvasTexture(): ModelViewerTexture {
+      const canvas = document.createElement('canvas');
+      const texture = new CanvasTexture(canvas);
+
+      return this[$buildTexture](texture);
     }
 
     async updated(changedProperties: Map<string, any>) {
       super.updated(changedProperties);
 
       if (changedProperties.has('variantName')) {
-        const updateVariantProgress = this[$progressTracker].beginActivity();
+        const updateVariantProgress =
+            this[$progressTracker].beginActivity('variant-update');
         updateVariantProgress(0.1);
         const model = this[$model];
         const {variantName} = this;
@@ -247,11 +281,18 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
     }
 
     materialFromPoint(pixelX: number, pixelY: number): Material|null {
+      const model = this[$model];
+      if (model == null) {
+        return null;
+      }
       const scene = this[$scene];
       const ndcCoords = scene.getNDC(pixelX, pixelY);
-      scene.raycaster.setFromCamera(ndcCoords, scene.getCamera());
+      const hit = scene.hitFromPoint(ndcCoords);
+      if (hit == null || hit.face == null) {
+        return null;
+      }
 
-      return this[$model]![$materialFromPoint](scene.raycaster);
+      return model[$materialFromPoint](hit);
     }
   }
 

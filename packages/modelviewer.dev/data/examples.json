@@ -50,6 +50,10 @@
       {
         "htmlId": "cyclingModels",
         "name": "Cycling Models"
+      },
+      {
+        "htmlId": "useA11y",
+        "name": "Use a11y"
       }
     ]
   },
@@ -138,12 +142,12 @@
         "name": "Add Hotspots"
       },
       {
-        "htmlId": "dimensions",
-        "name": "Dimensions"
+        "htmlId": "animatedHotspots",
+        "name": "Animated Hotspots"
       },
       {
-        "htmlId": "overlays",
-        "name": "Custom Overlays"
+        "htmlId": "dimensions",
+        "name": "Dimensions"
       },
       {
         "htmlId": "cameraViews",
@@ -160,8 +164,8 @@
         "name": "HDR skybox-image"
       },
       {
-        "htmlId": "litModel",
-        "name": "Lit Model"
+        "htmlId": "groundedSkybox",
+        "name": "Grounded Skybox"
       },
       {
         "htmlId": "unlitModel",
@@ -174,6 +178,10 @@
       {
         "htmlId": "neutralLighting",
         "name": "Neutral Lighting"
+      },
+      {
+        "htmlId": "toneMapping",
+        "name": "Tone Mapping"
       },
       {
         "htmlId": "renderExposure",
@@ -248,8 +256,20 @@
         "name": "Create Textures"
       },
       {
-        "htmlId": "swapTextures",
+        "htmlId": "swapTexturesExample",
         "name": "Swap Textures"
+      },
+      {
+        "htmlId": "transformTexturesExample",
+        "name": "Transform Textures"
+      },
+      {
+        "htmlId": "hideShowMeshVariantsExample",
+        "name": "Hide/Show Mesh Variants"
+      },
+      {
+        "htmlId": "animatedTexturesExample",
+        "name": "Animated Textures"
       },
       {
         "htmlId": "pickMaterialExample",
@@ -258,6 +278,36 @@
       {
         "htmlId": "exporter",
         "name": "Exporter"
+      }
+    ]
+  },
+  {
+    "name": "Post Process Effects",
+    "htmlName": "postprocessing",
+    "examples": [
+      {
+        "htmlId": "setup",
+        "name": "Setup Post Processing"
+      },
+      {
+        "htmlId": "effects",
+        "name": "The Effects API"
+      },
+      {
+        "htmlId": "colorgrade",
+        "name": "Color Grading"
+      },
+      {
+        "htmlId": "selective-effects",
+        "name": "Selective Effects"
+      },
+      {
+        "htmlId": "combining-effects",
+        "name": "Combining Effects"
+      },
+      {
+        "htmlId": "custom-effects",
+        "name": "Custom Effects"
       }
     ]
   }

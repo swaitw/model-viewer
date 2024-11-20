@@ -22,7 +22,7 @@ import {degreesToRadians, normalizeUnit} from '../styles/conversions.js';
 import {EvaluatedStyle, Intrinsics, SphericalIntrinsics, StyleEvaluator, Vector3Intrinsics} from '../styles/evaluators.js';
 import {IdentNode, NumberNode, numberNode, parseExpressions} from '../styles/parsers.js';
 import {DECAY_MILLISECONDS} from '../three-components/Damper.js';
-import {ChangeEvent, ChangeSource, PointerChangeEvent, SmoothControls} from '../three-components/SmoothControls.js';
+import {ChangeSource, PointerChangeEvent, SmoothControls} from '../three-components/SmoothControls.js';
 import {Constructor} from '../utilities.js';
 import {Path, timeline, TimingFunction} from '../utilities/animation.js';
 
@@ -89,13 +89,36 @@ export interface Finger {
   y: Path;
 }
 
+export interface A11yTranslationsInterface {
+  left: string;
+  right: string;
+  front: string;
+  back: string;
+  'upper-left': string;
+  'upper-right': string;
+  'upper-front': string;
+  'upper-back': string;
+  'lower-left': string;
+  'lower-right': string;
+  'lower-front': string;
+  'lower-back': string;
+  'interaction-prompt': string;
+}
+
 export type InteractionPromptStrategy = 'auto'|'none';
+export type InteractionPromptStyle = 'basic'|'wiggle';
 export type TouchAction = 'pan-y'|'pan-x'|'none';
 
 export const InteractionPromptStrategy:
     {[index: string]: InteractionPromptStrategy} = {
       AUTO: 'auto',
       NONE: 'none'
+    };
+
+export const InteractionPromptStyle:
+    {[index: string]: InteractionPromptStyle} = {
+      BASIC: 'basic',
+      WIGGLE: 'wiggle'
     };
 
 export const TouchAction: {[index: string]: TouchAction} = {
@@ -147,7 +170,7 @@ const minCameraOrbitIntrinsics = (element: ModelViewerElementBase&
   return {
     basis: [
       numberNode(-Infinity, 'rad'),
-      numberNode(Math.PI / 8, 'rad'),
+      numberNode(0, 'rad'),
       numberNode(radius, 'm')
     ],
     keywords: {auto: [null, null, null]}
@@ -162,7 +185,7 @@ const maxCameraOrbitIntrinsics = (element: ModelViewerElementBase) => {
   return {
     basis: [
       numberNode(Infinity, 'rad'),
-      numberNode(Math.PI - Math.PI / 8, 'rad'),
+      numberNode(Math.PI, 'rad'),
       numberNode(defaultRadius, 'm')
     ],
     keywords: {auto: [null, null, null]}
@@ -195,8 +218,11 @@ export const $fingerAnimatedContainers = Symbol('fingerAnimatedContainers');
 
 const $deferInteractionPrompt = Symbol('deferInteractionPrompt');
 const $updateAria = Symbol('updateAria');
+const $a11y = Symbol('a11y');
+const $updateA11y = Symbol('updateA11y');
 const $updateCameraForRadius = Symbol('updateCameraForRadius');
 
+const $cancelPrompts = Symbol('cancelPrompts');
 const $onChange = Symbol('onChange');
 const $onPointerChange = Symbol('onPointerChange');
 
@@ -204,6 +230,7 @@ const $waitingToPromptUser = Symbol('waitingToPromptUser');
 const $userHasInteracted = Symbol('userHasInteracted');
 const $promptElementVisibleTime = Symbol('promptElementVisibleTime');
 const $lastPromptOffset = Symbol('lastPromptOffset');
+const $cancellationSource = Symbol('cancellationSource');
 
 const $lastSpherical = Symbol('lastSpherical');
 const $jumpCamera = Symbol('jumpCamera');
@@ -229,13 +256,17 @@ export declare interface ControlsInterface {
   minFieldOfView: string;
   maxFieldOfView: string;
   interactionPrompt: InteractionPromptStrategy;
+  interactionPromptStyle: InteractionPromptStyle;
   interactionPromptThreshold: number;
   orbitSensitivity: number;
+  zoomSensitivity: number;
+  panSensitivity: number;
   touchAction: TouchAction;
   interpolationDecay: number;
   disableZoom: boolean;
   disablePan: boolean;
   disableTap: boolean;
+  a11y: A11yTranslationsInterface|string|null;
   getCameraOrbit(): SphericalPosition;
   getCameraTarget(): Vector3D;
   getFieldOfView(): number;
@@ -319,8 +350,18 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     interactionPrompt: InteractionPromptStrategy =
         InteractionPromptStrategy.AUTO;
 
+    @property({type: String, attribute: 'interaction-prompt-style'})
+    interactionPromptStyle: InteractionPromptStyle =
+        InteractionPromptStyle.WIGGLE;
+
     @property({type: Number, attribute: 'orbit-sensitivity'})
     orbitSensitivity: number = 1;
+
+    @property({type: Number, attribute: 'zoom-sensitivity'})
+    zoomSensitivity: number = 1;
+
+    @property({type: Number, attribute: 'pan-sensitivity'})
+    panSensitivity: number = 1;
 
     @property({type: String, attribute: 'touch-action'})
     touchAction: TouchAction = TouchAction.NONE;
@@ -337,6 +378,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     @property({type: Number, attribute: 'interpolation-decay'})
     interpolationDecay: number = DECAY_MILLISECONDS;
 
+    @property() a11y: A11yTranslationsInterface|string|null = null;
+
     protected[$promptElement] =
         this.shadowRoot!.querySelector('.interaction-prompt') as HTMLElement;
     protected[$promptAnimatedContainer] =
@@ -352,6 +395,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$promptElementVisibleTime] = Infinity;
     protected[$userHasInteracted] = false;
     protected[$waitingToPromptUser] = false;
+    protected[$cancellationSource] = ChangeSource.AUTOMATIC;
 
     protected[$controls] = new SmoothControls(
         this[$scene].camera as PerspectiveCamera, this[$userInputElement],
@@ -361,6 +405,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$jumpCamera] = false;
     protected[$initialized] = false;
     protected[$maintainThetaPhi] = false;
+    protected[$a11y] = {} as A11yTranslationsInterface;
 
     get inputSensitivity(): number {
       return this[$controls].inputSensitivity;
@@ -385,7 +430,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     getCameraTarget(): Vector3D {
       return toVector3D(
           this[$renderer].isPresenting ? this[$renderer].arRenderer.target :
-                                         this[$scene].getTarget());
+                                         this[$scene].getDynamicTarget());
     }
 
     getFieldOfView(): number {
@@ -428,7 +473,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       super.connectedCallback();
 
       this[$controls].addEventListener(
-          'change', this[$onChange] as (event: Event) => void);
+          'user-interaction', this[$cancelPrompts]);
       this[$controls].addEventListener(
           'pointer-change-start',
           this[$onPointerChange] as (event: Event) => void);
@@ -441,7 +486,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       super.disconnectedCallback();
 
       this[$controls].removeEventListener(
-          'change', this[$onChange] as (event: Event) => void);
+          'user-interaction', this[$cancelPrompts]);
       this[$controls].removeEventListener(
           'pointer-change-start',
           this[$onPointerChange] as (event: Event) => void);
@@ -492,6 +537,12 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         }
       }
 
+      if (changedProperties.has('interactionPromptStyle')) {
+        this[$promptAnimatedContainer].style.opacity =
+            this.interactionPromptStyle == InteractionPromptStyle.BASIC ? '1' :
+                                                                          '0';
+      }
+
       if (changedProperties.has('touchAction')) {
         const touchAction = this.touchAction;
         controls.applyOptions({touchAction});
@@ -502,15 +553,28 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         controls.orbitSensitivity = this.orbitSensitivity;
       }
 
+      if (changedProperties.has('zoomSensitivity')) {
+        controls.zoomSensitivity = this.zoomSensitivity;
+      }
+
+      if (changedProperties.has('panSensitivity')) {
+        controls.panSensitivity = this.panSensitivity;
+      }
+
       if (changedProperties.has('interpolationDecay')) {
         controls.setDamperDecayTime(this.interpolationDecay);
         scene.setTargetDamperDecayTime(this.interpolationDecay);
+      }
+
+      if (changedProperties.has('a11y')) {
+        this[$updateA11y]();
       }
 
       if (this[$jumpCamera] === true) {
         Promise.resolve().then(() => {
           controls.jumpToGoal();
           scene.jumpToGoal();
+          this[$onChange]();
           this[$jumpCamera] = false;
         });
       }
@@ -556,6 +620,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       let startTime = performance.now();
       const {width, height} = this[$scene];
+      const rect = this.getBoundingClientRect();
 
       const dispatchTouches = (type: string) => {
         for (const [i, position] of positions.entries()) {
@@ -572,8 +637,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
             pointerId: i - 5678,  // help ensure uniqueness
             pointerType: 'touch',
             target: inputElement,
-            clientX: width * position.x,
-            clientY: height * position.y,
+            clientX: width * position.x + rect.x,
+            clientY: height * position.y + rect.y,
             altKey: true  // flag that this is not a user interaction
           } as PointerEventInit;
 
@@ -582,15 +647,18 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       };
 
       const moveTouches = () => {
-        // cancel interaction if something else moves the camera
-        const {changeSource} = this[$controls];
-        if (changeSource !== ChangeSource.AUTOMATIC) {
+        // Cancel interaction if something else moves the camera or input is
+        // removed from the DOM.
+        const changeSource = this[$cancellationSource];
+        if (changeSource !== ChangeSource.AUTOMATIC ||
+            !inputElement.isConnected) {
           for (const fingerElement of this[$fingerAnimatedContainers]) {
             fingerElement.style.opacity = '0';
           }
           dispatchTouches('pointercancel');
           this.dispatchEvent(new CustomEvent<CameraChangeDetails>(
               'interact-stopped', {detail: {source: changeSource}}));
+          document.removeEventListener('visibilitychange', onVisibilityChange);
           return;
         }
 
@@ -606,7 +674,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         } else {
           dispatchTouches('pointerup');
           this.dispatchEvent(new CustomEvent<CameraChangeDetails>(
-              'interact-stopped', {detail: {source: changeSource}}));
+              'interact-stopped', {detail: {source: ChangeSource.AUTOMATIC}}));
           document.removeEventListener('visibilitychange', onVisibilityChange);
         }
       };
@@ -624,13 +692,18 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       dispatchTouches('pointerdown');
 
+      this[$cancellationSource] = ChangeSource.AUTOMATIC;
+
       requestAnimationFrame(moveTouches);
     }
 
     [$syncFieldOfView](style: EvaluatedStyle<Intrinsics<['rad']>>) {
+      const controls = this[$controls];
       const scene = this[$scene];
       scene.framedFoVDeg = style[0] * 180 / Math.PI;
-      this[$controls].setFieldOfView(scene.adjustedFoV(scene.framedFoVDeg));
+      controls.changeSource = ChangeSource.NONE;
+      controls.setFieldOfView(scene.adjustedFoV(scene.framedFoVDeg));
+      this[$cancelPrompts]();
     }
 
     [$syncCameraOrbit](style: EvaluatedStyle<SphericalIntrinsics>) {
@@ -643,6 +716,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       }
       controls.changeSource = ChangeSource.NONE;
       controls.setOrbit(style[0], style[1], style[2]);
+      this[$cancelPrompts]();
     }
 
     [$syncMinCameraOrbit](style: EvaluatedStyle<SphericalIntrinsics>) {
@@ -683,6 +757,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       }
       this[$controls].changeSource = ChangeSource.NONE;
       this[$renderer].arRenderer.updateTarget();
+      this[$cancelPrompts]();
     }
 
     [$tick](time: number, delta: number) {
@@ -706,7 +781,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         }
       }
 
-      if (isFinite(this[$promptElementVisibleTime])) {
+      if (isFinite(this[$promptElementVisibleTime]) &&
+          this.interactionPromptStyle === InteractionPromptStyle.WIGGLE) {
         const animationTime =
             ((now - this[$promptElementVisibleTime]) / PROMPT_ANIMATION_TIME) %
             1;
@@ -729,9 +805,11 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         }
       }
 
-      controls.update(time, delta);
-      if (scene.updateTarget(delta)) {
-        this[$onChange]({type: 'change', source: controls.changeSource});
+      const cameraMoved = controls.update(time, delta);
+      const targetMoved = scene.updateTarget(delta);
+
+      if (cameraMoved || targetMoved) {
+        this[$onChange]();
       }
     }
 
@@ -747,11 +825,10 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
      * orbiting at the supplied radius.
      */
     [$updateCameraForRadius](radius: number) {
-      const maximumRadius =
-          Math.max(this[$scene].boundingSphere.radius, radius);
+      const maximumRadius = Math.max(this[$scene].farRadius(), radius);
 
       const near = 0;
-      const far = 2 * maximumRadius;
+      const far = Math.abs(2 * maximumRadius);
       this[$controls].updateNearFar(near, far);
     }
 
@@ -767,14 +844,24 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       const azimuthalQuadrantLabel =
           AZIMUTHAL_QUADRANT_LABELS[azimuthalQuadrant];
       const polarTrientLabel = POLAR_TRIENT_LABELS[polarTrient];
+      const position = `${polarTrientLabel}${azimuthalQuadrantLabel}`;
 
-      this[$updateStatus](
-          `View from stage ${polarTrientLabel}${azimuthalQuadrantLabel}`);
+      const key = position as keyof A11yTranslationsInterface;
+      if (key in this[$a11y]) {
+        this[$updateStatus](this[$a11y][key]);
+      } else {
+        this[$updateStatus](`View from stage ${position}`);
+      }
     }
 
     get[$ariaLabel]() {
-      return super[$ariaLabel] +
-          (this.cameraControls ? INTERACTION_PROMPT : '');
+      let interactionPrompt = INTERACTION_PROMPT;
+      if ('interaction-prompt' in this[$a11y]) {
+        interactionPrompt = `. ${this[$a11y]['interaction-prompt']}`;
+      }
+
+      return super[$ariaLabel].replace(/\.$/, '') +
+          (this.cameraControls ? interactionPrompt : '');
     }
 
     async[$onResize](event: any) {
@@ -816,26 +903,53 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       this.jumpCameraToGoal();
     }
 
-    [$onChange] = ({source}: ChangeEvent) => {
-      this[$updateAria]();
-      this[$needsRender]();
+    [$cancelPrompts] = () => {
+      const source = this[$controls].changeSource;
+      this[$cancellationSource] = source;
 
       if (source === ChangeSource.USER_INTERACTION) {
         this[$userHasInteracted] = true;
         this[$deferInteractionPrompt]();
       }
+    };
+
+    [$onChange] = () => {
+      this[$updateAria]();
+      this[$needsRender]();
+      const source = this[$controls].changeSource;
 
       this.dispatchEvent(new CustomEvent<CameraChangeDetails>(
           'camera-change', {detail: {source}}));
     };
 
     [$onPointerChange] = (event: PointerChangeEvent) => {
-      if (event.type === 'pointer-change-start') {
-        this[$container].classList.add('pointer-tumbling');
-      } else {
-        this[$container].classList.remove('pointer-tumbling');
-      }
+      this[$container].classList.toggle(
+          'pointer-tumbling', event.type === 'pointer-change-start');
     };
+
+    [$updateA11y]() {
+      if (typeof this.a11y === 'string') {
+        if (this.a11y.startsWith('{')) {
+          try {
+            this[$a11y] = JSON.parse(this.a11y);
+          } catch (error) {
+            console.warn('Error parsing a11y JSON:', error);
+          }
+        } else if (this.a11y.length > 0) {
+          console.warn(
+              'Error not supported format, should be a JSON string:',
+              this.a11y);
+        } else {
+          this[$a11y] = <A11yTranslationsInterface>{};
+        }
+      } else if (typeof this.a11y === 'object' && this.a11y != null) {
+        this[$a11y] = Object.assign({}, this.a11y);
+      } else {
+        this[$a11y] = <A11yTranslationsInterface>{};
+      }
+
+      this[$userInputElement].setAttribute('aria-label', this[$ariaLabel]);
+    }
   }
 
   return ControlsModelViewerElement;

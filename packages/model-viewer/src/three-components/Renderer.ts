@@ -13,16 +13,15 @@
  * limitations under the License.
  */
 
-import {ACESFilmicToneMapping, Event, EventDispatcher, sRGBEncoding, Vector2, WebGLRenderer} from 'three';
+import {ACESFilmicToneMapping, Event, EventDispatcher, NeutralToneMapping, Vector2, WebGLRenderer} from 'three';
 
 import {$updateEnvironment} from '../features/environment.js';
 import {ModelViewerGlobalConfig} from '../features/loading.js';
 import ModelViewerElementBase, {$canvas, $tick, $updateSize} from '../model-viewer-base.js';
-import {clamp, isDebugMode, resolveDpr} from '../utilities.js';
+import {clamp, isDebugMode} from '../utilities.js';
 
 import {ARRenderer} from './ARRenderer.js';
 import {CachingGLTFLoader} from './CachingGLTFLoader.js';
-import {Debugger} from './Debugger.js';
 import {ModelViewerGLTFInstance} from './gltf-instance/ModelViewerGLTFInstance.js';
 import {ModelScene} from './ModelScene.js';
 import TextureUtils from './TextureUtils.js';
@@ -46,6 +45,7 @@ const SCALE_STEPS = [1, 0.79, 0.62, 0.5, 0.4, 0.31, 0.25];
 const DEFAULT_LAST_STEP = 3;
 
 export const DEFAULT_POWER_PREFERENCE: string = 'high-performance';
+const COMMERCE_EXPOSURE = 1.3;
 
 /**
  * Registers canvases with Canvas2DRenderingContexts and renders them
@@ -58,16 +58,20 @@ export const DEFAULT_POWER_PREFERENCE: string = 'high-performance';
  * Canvas2DRenderingContext if supported for cheaper transferring of
  * the texture.
  */
-export class Renderer extends EventDispatcher {
-  private static _singleton = new Renderer({
-    powerPreference:
-        (((self as any).ModelViewerElement || {}) as ModelViewerGlobalConfig)
-            .powerPreference ||
-        DEFAULT_POWER_PREFERENCE,
-    debug: isDebugMode()
-  });
+export class Renderer extends
+    EventDispatcher<{contextlost: {sourceEvent: WebGLContextEvent}}> {
+  private static _singleton: Renderer;
 
   static get singleton() {
+    if (!this._singleton) {
+      this._singleton = new Renderer({
+        powerPreference: (((self as any).ModelViewerElement || {}) as
+                          ModelViewerGlobalConfig)
+                             .powerPreference ||
+            DEFAULT_POWER_PREFERENCE,
+        debug: isDebugMode()
+      });
+    }
     return this._singleton;
   }
 
@@ -99,7 +103,6 @@ export class Renderer extends EventDispatcher {
   public height = 0;
   public dpr = 1;
 
-  protected debugger: Debugger|null = null;
   private scenes: Set<ModelScene> = new Set();
   private multipleScenesVisible = false;
   private lastTick = performance.now();
@@ -131,7 +134,7 @@ export class Renderer extends EventDispatcher {
   constructor(options: RendererOptions) {
     super();
 
-    this.dpr = resolveDpr();
+    this.dpr = window.devicePixelRatio;
 
     this.canvas3D = document.createElement('canvas');
     this.canvas3D.id = 'webgl-canvas';
@@ -143,15 +146,15 @@ export class Renderer extends EventDispatcher {
         alpha: true,
         antialias: true,
         powerPreference: options.powerPreference as WebGLPowerPreference,
-        preserveDrawingBuffer: true
+        preserveDrawingBuffer: true,
       });
       this.threeRenderer.autoClear = true;
-      this.threeRenderer.outputEncoding = sRGBEncoding;
-      this.threeRenderer.physicallyCorrectLights = true;
       this.threeRenderer.setPixelRatio(1);  // handle pixel ratio externally
 
-      this.debugger = !!options.debug ? new Debugger(this) : null;
-      this.threeRenderer.debug = {checkShaderErrors: !!this.debugger};
+      this.threeRenderer.debug = {
+        checkShaderErrors: !!options.debug,
+        onShaderError: null
+      };
 
       // ACESFilmicToneMapping appears to be the most "saturated",
       // and similar to Filament's gltf-viewer.
@@ -186,10 +189,6 @@ export class Renderer extends EventDispatcher {
       this.threeRenderer.setAnimationLoop(
           (time: number, frame?: any) => this.render(time, frame));
     }
-
-    if (this.debugger != null) {
-      this.debugger.addScene(scene);
-    }
   }
 
   unregisterScene(scene: ModelScene) {
@@ -202,14 +201,12 @@ export class Renderer extends EventDispatcher {
     if (this.canRender && this.scenes.size === 0) {
       this.threeRenderer.setAnimationLoop(null);
     }
-
-    if (this.debugger != null) {
-      this.debugger.removeScene(scene);
-    }
   }
 
   displayCanvas(scene: ModelScene): HTMLCanvasElement {
-    return this.multipleScenesVisible ? scene.element[$canvas] : this.canvas3D;
+    return scene.element.modelIsVisible && !this.multipleScenesVisible ?
+        this.canvas3D :
+        scene.element[$canvas];
   }
 
   /**
@@ -251,7 +248,7 @@ export class Renderer extends EventDispatcher {
    * device pixel ratio.
    */
   private updateRendererSize() {
-    const dpr = resolveDpr();
+    const dpr = window.devicePixelRatio;
     if (dpr !== this.dpr) {
       // If the device pixel ratio has changed due to page zoom, elements
       // specified by % width do not fire a resize event even though their CSS
@@ -291,6 +288,7 @@ export class Renderer extends EventDispatcher {
       canvas.width = width;
       canvas.height = height;
       scene.forceRescale();
+      scene.effectRenderer?.setSize(width, height);
     }
   }
 
@@ -374,10 +372,11 @@ export class Renderer extends EventDispatcher {
   }
 
   private copyPixels(scene: ModelScene, width: number, height: number) {
-    if (scene.context == null) {
-      scene.createContext();
+    const context2D = scene.context;
+    if (context2D == null) {
+      console.log('could not acquire 2d context');
+      return;
     }
-    const context2D = scene.context as CanvasRenderingContext2D;
     context2D.clearRect(0, 0, width, height);
     context2D.drawImage(
         this.canvas3D, 0, 0, width, height, 0, 0, width, height);
@@ -410,13 +409,19 @@ export class Renderer extends EventDispatcher {
    * the time that has passed since the last rendered frame.
    */
   preRender(scene: ModelScene, t: number, delta: number) {
-    const {element, exposure} = scene;
+    const {element, exposure, toneMapping} = scene;
 
     element[$tick](t, delta);
 
     const exposureIsNumber =
         typeof exposure === 'number' && !Number.isNaN(exposure);
-    this.threeRenderer.toneMappingExposure = exposureIsNumber ? exposure : 1.0;
+    const env = element.environmentImage;
+    const sky = element.skyboxImage;
+    const compensateExposure = toneMapping === NeutralToneMapping &&
+        (env === 'neutral' || env === 'legacy' || (!env && !sky));
+    this.threeRenderer.toneMappingExposure =
+        (exposureIsNumber ? exposure : 1.0) *
+        (compensateExposure ? COMMERCE_EXPOSURE : 1.0);
   }
 
   render(t: number, frame?: XRFrame) {
@@ -490,11 +495,18 @@ export class Renderer extends EventDispatcher {
       this.threeRenderer.setRenderTarget(null);
       this.threeRenderer.setViewport(
           0, Math.ceil(this.height * this.dpr) - height, width, height);
-      this.threeRenderer.render(scene, scene.camera);
-
-      if (this.multipleScenesVisible || scene.renderCount === 0) {
-        this.copyPixels(scene, width, height);
+      if (scene.effectRenderer != null) {
+        scene.effectRenderer.render(delta);
       } else {
+        this.threeRenderer.autoClear =
+            true;  // this might get reset by the effectRenderer
+        this.threeRenderer.toneMapping = scene.toneMapping;
+        this.threeRenderer.render(scene, scene.camera);
+      }
+      if (this.multipleScenesVisible ||
+          (!scene.element.modelIsVisible && scene.renderCount === 0)) {
+        this.copyPixels(scene, width, height);
+      } else if (canvas3D.parentElement !== scene.canvas.parentElement) {
         scene.canvas.parentElement!.appendChild(canvas3D);
         scene.canvas.classList.remove('show');
       }

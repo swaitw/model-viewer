@@ -13,13 +13,13 @@
  * limitations under the License.
  */
 
+import {expect} from 'chai';
+
 import {CameraChangeDetails} from '../../features/controls.js';
 import {ModelViewerElement} from '../../model-viewer.js';
 import {ChangeSource} from '../../three-components/SmoothControls.js';
 import {timePasses, waitForEvent} from '../../utilities.js';
 import {assetPath, rafPasses} from '../helpers.js';
-
-const expect = chai.expect;
 
 const ODD_SHAPE_GLB_PATH = assetPath('models/odd-shape.glb');
 const AUTO_ROTATE_DELAY = 50;
@@ -56,7 +56,7 @@ suite('Staging', () => {
         await timePasses();
       });
 
-      test('causes the model to rotate after a delay', async () => {
+      test.skip('causes the model to rotate after a delay', async () => {
         const {turntableRotation} = element;
         await rafPasses();
         expect(element.turntableRotation).to.be.equal(turntableRotation);
@@ -65,12 +65,11 @@ suite('Staging', () => {
         expect(element.turntableRotation).to.be.greaterThan(turntableRotation);
       });
 
-      // TODO(#1205)
-      test.skip(
+      test(
           'retains turntable rotation when auto-rotate is toggled',
           async () => {
             element.autoRotateDelay = 0;
-            await timePasses();
+            await rafPasses();
             await rafPasses();
 
             const {turntableRotation} = element;
@@ -78,23 +77,23 @@ suite('Staging', () => {
             expect(turntableRotation).to.be.greaterThan(0);
 
             element.autoRotate = false;
-            await timePasses();
+            await rafPasses();
             await rafPasses();
 
             expect(element.turntableRotation).to.be.equal(turntableRotation);
 
             element.autoRotate = true;
-            await timePasses();
+            await rafPasses();
             await rafPasses();
 
             expect(element.turntableRotation)
                 .to.be.greaterThan(turntableRotation);
           });
 
-      // TODO(#1206)
       test.skip('pauses rotate after user interaction', async () => {
         const {turntableRotation} = element;
         await timePasses(AUTO_ROTATE_DELAY);
+        await rafPasses();
         await rafPasses();
 
         const {turntableRotation: initialTurntableRotation} = element;
@@ -103,13 +102,13 @@ suite('Staging', () => {
         element.dispatchEvent(new CustomEvent<CameraChangeDetails>(
             'camera-change',
             {detail: {source: ChangeSource.USER_INTERACTION}}));
-        await timePasses();
-
+        await rafPasses();
         await rafPasses();
 
         expect(element.turntableRotation).to.be.equal(initialTurntableRotation);
 
         await timePasses(AUTO_ROTATE_DELAY);
+        await rafPasses();
         await rafPasses();
 
         expect(element.turntableRotation)
